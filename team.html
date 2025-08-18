@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Team Room - Signal & Noise</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .case-file-card { background-color: #fdfd96; border-left: 5px solid #f0e68c; }
+        .ai-response { background-color: #e0f2fe; }
+        .team-question { background-color: #d1fae5; }
+        .model-answer { background-color: #e9d5ff; border-left: 4px solid #8b5cf6; }
+        .joker-active-btn {
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+            50% { transform: scale(1.05); box-shadow: 0 0 10px 10px rgba(34, 197, 94, 0); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div id="team-selection-screen" class="flex items-center justify-center h-screen">
+        <div class="text-center bg-white p-12 rounded-xl shadow-2xl">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6">Select Your Team</h2>
+            <div id="team-buttons" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                <!-- Team buttons will be populated here -->
+            </div>
+        </div>
+    </div>
+
+    <div id="main-game-screen" class="container mx-auto p-4 md:p-8 hidden">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-900">Signal & Noise <span id="team-room-title" class="text-green-600">(Team Room)</span></h1>
+        </header>
+
+        <main class="grid grid-cols-1 gap-8">
+            <div class="bg-white p-6 rounded-lg shadow-lg">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 id="round-title" class="text-2xl font-bold">Round <span id="round-number">1</span></h2>
+                    <div id="timer" class="text-3xl font-bold text-gray-400">10:00</div>
+                </div>
+                
+                <div id="game-area">
+                    <div id="prep-phase-display" class="text-center p-4 mb-4 bg-blue-100 border-2 border-dashed border-blue-300 rounded-lg hidden">
+                        <h3 class="text-lg font-semibold text-blue-800">Preparation Phase</h3>
+                        <p class="text-blue-700">Review the case file and decide if you want to use your Joker!</p>
+                        <div id="prep-timer" class="text-4xl font-bold text-blue-600 mt-2">00:30</div>
+                        <div id="team-prep-actions" class="mt-4">
+                             <button id="joker-btn" class="bg-yellow-400 text-yellow-900 px-4 py-2 rounded-md font-semibold hover:bg-yellow-500 disabled:bg-gray-300">Use Joker</button>
+                        </div>
+                    </div>
+
+                    <div id="case-file-display" class="p-4 rounded-lg mb-6 case-file-card hidden">
+                        <h3 id="case-file-title" class="font-bold text-lg mb-2">Case File</h3>
+                        <p id="case-file-text" class="text-gray-700 whitespace-pre-wrap"></p>
+                    </div>
+
+                    <div id="interaction-area" class="hidden">
+                        <div id="chat-box" class="h-96 overflow-y-auto border rounded-lg p-4 mb-4 bg-gray-50"></div>
+                        <p class="text-center text-gray-600 font-semibold">Submit your final diagnosis when ready.</p>
+                    </div>
+                     <div id="start-prompt" class="text-center py-16">
+                        <p class="text-xl text-gray-500">Waiting for the moderator to start the round...</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        let myTeamId = null;
+
+        // DOM Elements
+        const teamSelectionScreen = document.getElementById('team-selection-screen');
+        const mainGameScreen = document.getElementById('main-game-screen');
+        const teamButtons = document.getElementById('team-buttons');
+        const teamRoomTitle = document.getElementById('team-room-title');
+        const roundNumberEl = document.getElementById('round-number');
+        const timerEl = document.getElementById('timer');
+        const caseFileDisplay = document.getElementById('case-file-display');
+        const caseFileTitle = document.getElementById('case-file-title');
+        const caseFileText = document.getElementById('case-file-text');
+        const interactionArea = document.getElementById('interaction-area');
+        const startPrompt = document.getElementById('start-prompt');
+        const chatBox = document.getElementById('chat-box');
+        const prepPhaseDisplay = document.getElementById('prep-phase-display');
+        const prepTimerEl = document.getElementById('prep-timer');
+        const teamPrepActions = document.getElementById('team-prep-actions');
+        const jokerBtn = document.getElementById('joker-btn');
+
+        function setupTeamSelection() {
+            for (let i = 1; i <= 5; i++) {
+                const btn = document.createElement('button');
+                btn.className = 'bg-gray-200 hover:bg-gray-300 font-bold py-3 px-6 rounded-lg';
+                btn.textContent = `Team ${i}`;
+                btn.onclick = () => selectTeam(i);
+                teamButtons.appendChild(btn);
+            }
+        }
+
+        function selectTeam(teamId) {
+            myTeamId = teamId;
+            sessionStorage.setItem('signalNoiseTeamId', teamId);
+            teamRoomTitle.textContent = `(Team ${myTeamId} Room)`;
+            teamSelectionScreen.classList.add('hidden');
+            mainGameScreen.classList.remove('hidden');
+        }
+
+        function getGameState() {
+            const stateJSON = localStorage.getItem('signalNoiseGameState');
+            return stateJSON ? JSON.parse(stateJSON) : null;
+        }
+
+        function renderUI() {
+            const state = getGameState();
+            if (!state) {
+                startPrompt.classList.remove('hidden');
+                interactionArea.classList.add('hidden');
+                caseFileDisplay.classList.add('hidden');
+                prepPhaseDisplay.classList.add('hidden');
+                return;
+            }
+
+            // Round and Timer
+            roundNumberEl.textContent = state.round || 1;
+            const timerValue = state.prepActive ? state.prepTimeLeft : state.mainTimeLeft;
+            const minutes = Math.floor(timerValue / 60);
+            const seconds = timerValue % 60;
+            timerEl.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            timerEl.className = `text-3xl font-bold ${state.gameActive ? 'text-red-500' : 'text-gray-400'}`;
+            prepTimerEl.textContent = `00:${state.prepTimeLeft.toString().padStart(2, '0')}`;
+
+            // Phase display
+            prepPhaseDisplay.classList.toggle('hidden', !state.prepActive);
+            interactionArea.classList.toggle('hidden', state.prepActive);
+
+            if (state.prepActive || state.gameActive) {
+                startPrompt.classList.add('hidden');
+                caseFileDisplay.classList.remove('hidden');
+                caseFileTitle.textContent = state.currentCaseFile.title;
+                caseFileText.textContent = state.currentCaseFile.noise;
+            } else {
+                startPrompt.classList.remove('hidden');
+                caseFileDisplay.classList.add('hidden');
+                interactionArea.classList.add('hidden');
+            }
+            
+            // Joker Button Logic
+            const myTeam = state.teams.find(t => t.id === myTeamId);
+            if (myTeam) {
+                jokerBtn.disabled = !myTeam.jokerAvailable;
+                jokerBtn.textContent = myTeam.jokerActive ? 'Joker Active!' : 'Use Joker';
+                jokerBtn.classList.toggle('bg-green-500', myTeam.jokerActive);
+                jokerBtn.classList.toggle('text-white', myTeam.jokerActive);
+                jokerBtn.classList.toggle('joker-active-btn', myTeam.jokerActive);
+            }
+
+            // Chat History
+            chatBox.innerHTML = '';
+            state.chatHistory.forEach(msg => {
+                const messageEl = document.createElement('div');
+                messageEl.className = `p-3 rounded-lg mb-2 ${msg.type}`;
+                messageEl.innerHTML = `<p><span class="font-bold">${msg.author}:</span> ${msg.text}</p>`;
+                chatBox.appendChild(messageEl);
+            });
+            
+            if (state.solutionVisible && state.tenTenAnswer) {
+                const solutionEl = document.createElement('div');
+                solutionEl.className = 'p-3 rounded-lg mb-2 model-answer';
+                solutionEl.innerHTML = `<p><span class="font-bold">10/10 Model Answer:</span> ${state.tenTenAnswer}</p>`;
+                chatBox.appendChild(solutionEl);
+            }
+
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+        
+        function handleJokerClick() {
+            const state = getGameState();
+            if (!state || !state.prepActive) return;
+
+            const myTeam = state.teams.find(t => t.id === myTeamId);
+            if (myTeam && myTeam.jokerAvailable) {
+                myTeam.jokerActive = !myTeam.jokerActive;
+                localStorage.setItem('signalNoiseGameState', JSON.stringify(state));
+                renderUI();
+            }
+        }
+
+        const savedTeamId = sessionStorage.getItem('signalNoiseTeamId');
+        if (savedTeamId) {
+            selectTeam(parseInt(savedTeamId));
+        } else {
+            setupTeamSelection();
+        }
+
+        setInterval(renderUI, 1000);
+        
+        jokerBtn.addEventListener('click', handleJokerClick);
+
+        renderUI();
+    </script>
+</body>
+</html>
