@@ -159,8 +159,15 @@
             prepTimerEl.textContent = `00:${state.prepTimeLeft.toString().padStart(2, '0')}`;
 
             prepPhaseDisplay.classList.toggle('hidden', !state.prepActive);
-            interactionArea.classList.toggle('hidden', !state.gameActive);
-            diagnosisPanel.classList.toggle('hidden', !state.gameActive);
+            
+            if (state.gameActive) {
+                interactionArea.classList.remove('hidden');
+                diagnosisPanel.classList.remove('hidden');
+            } else {
+                interactionArea.classList.add('hidden');
+                diagnosisPanel.classList.add('hidden');
+            }
+
 
             if (state.prepActive || state.gameActive) {
                 startPrompt.classList.add('hidden');
