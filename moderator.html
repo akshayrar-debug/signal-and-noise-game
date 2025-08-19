@@ -11,7 +11,6 @@
         .case-file-card { background-color: #fdfd96; border-left: 5px solid #f0e68c; }
         .spinner { border-top-color: #3498db; animation: spin 1s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        #detailed-scoreboard-page, #diagnosis-modal { transition: opacity 0.3s ease-in-out; }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
@@ -21,18 +20,12 @@
             <h1 class="text-4xl font-bold text-gray-900">Signal & Noise <span class="text-blue-600">(Moderator)</span></h1>
         </header>
 
-        <div id="moderator-controls" class="bg-white p-4 rounded-lg shadow-md mb-8 relative">
+        <div id="moderator-controls" class="bg-white p-4 rounded-lg shadow-md mb-8">
             <h2 class="text-xl font-semibold mb-4 text-center">Moderator Panel</h2>
             <div class="flex flex-wrap justify-center items-center gap-4">
                  <p id="case-file-status" class="text-gray-600">Click "Start New Round" to begin.</p>
                 <button id="start-round-btn" class="bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700">Start New Round</button>
-                <button id="end-round-btn" class="bg-red-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-red-700 hidden">End Round</button>
             </div>
-            <button id="scoreboard-icon" class="absolute top-4 right-4 text-gray-500 hover:text-blue-600">
-                 <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-            </button>
         </div>
 
         <main class="grid grid-cols-1 gap-8">
@@ -61,28 +54,6 @@
             </div>
         </main>
     </div>
-
-    <!-- Detailed Scoreboard Page -->
-    <div id="detailed-scoreboard-page" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center p-4 hidden opacity-0 z-50">
-        <div class="bg-white rounded-lg shadow-2xl p-8 w-full max-w-3xl">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-3xl font-bold">Full Scoreboard</h2>
-                <button id="close-scoreboard-btn" class="text-gray-500 hover:text-red-600">
-                     <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
-            </div>
-            <div id="detailed-scoreboard-content" class="space-y-2"></div>
-        </div>
-    </div>
-
-    <!-- Diagnosis Modal -->
-    <div id="diagnosis-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center p-4 hidden opacity-0 z-50">
-        <div class="bg-white rounded-lg shadow-2xl p-8 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <h2 class="text-3xl font-bold mb-6 text-center">Team Submissions</h2>
-            <div id="diagnosis-display" class="space-y-6"></div>
-            <button id="score-round-btn" class="w-full mt-6 bg-purple-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-purple-700">Score Round & Reveal Answers</button>
-        </div>
-    </div>
     
     <script>
         let gameState = {
@@ -99,20 +70,12 @@
 
         const caseFileStatus = document.getElementById('case-file-status');
         const startRoundBtn = document.getElementById('start-round-btn');
-        const endRoundBtn = document.getElementById('end-round-btn');
         const roundNumberEl = document.getElementById('round-number');
         const timerEl = document.getElementById('timer');
         const caseFileDisplay = document.getElementById('case-file-display');
         const caseFileTitle = document.getElementById('case-file-title');
         const caseFileText = document.getElementById('case-file-text');
         const startPrompt = document.getElementById('start-prompt');
-        const scoreboardIcon = document.getElementById('scoreboard-icon');
-        const detailedScoreboardPage = document.getElementById('detailed-scoreboard-page');
-        const closeScoreboardBtn = document.getElementById('close-scoreboard-btn');
-        const detailedScoreboardContent = document.getElementById('detailed-scoreboard-content');
-        const diagnosisModal = document.getElementById('diagnosis-modal');
-        const diagnosisDisplay = document.getElementById('diagnosis-display');
-        const scoreRoundBtn = document.getElementById('score-round-btn');
         const prepPhaseDisplay = document.getElementById('prep-phase-display');
         const prepTimerEl = document.getElementById('prep-timer');
         const jokerStatusDisplay = document.getElementById('joker-status-display');
@@ -120,7 +83,7 @@
         function initializeGame() {
             localStorage.clear();
             for (let i = 1; i <= 5; i++) {
-                gameState.teams.push({ id: i, name: `Team ${i}`, score: 0, jokerAvailable: true, jokerActive: false, diagnosis: { rootCause: '', goal: '' } });
+                gameState.teams.push({ id: i, name: `Team ${i}`, score: 0, jokerAvailable: true, jokerActive: false, diagnosis: { rootCause: '', goal: '' }, hasSubmitted: false });
             }
             updateLocalStorage();
         }
@@ -150,11 +113,12 @@
             gameState.teams.forEach(t => {
                 t.jokerActive = false;
                 t.diagnosis = { rootCause: '', goal: '' };
+                t.hasSubmitted = false;
             });
             
             roundNumberEl.textContent = gameState.round;
-            caseFileTitle.textContent = gameState.currentCaseFile.title;
-            caseFileText.textContent = gameState.currentCaseFile.noise;
+            caseFileTitle.textContent = newCaseFile.title;
+            caseFileText.textContent = newCaseFile.noise;
             
             startPreparationPhase();
         }
@@ -166,7 +130,6 @@
             startPrompt.classList.add('hidden');
             caseFileDisplay.classList.remove('hidden');
             startRoundBtn.classList.add('hidden');
-            endRoundBtn.classList.add('hidden');
             prepPhaseDisplay.classList.remove('hidden');
             
             timerEl.classList.add('text-gray-400');
@@ -201,7 +164,6 @@
             gameState.gameActive = true;
 
             prepPhaseDisplay.classList.add('hidden');
-            endRoundBtn.classList.remove('hidden');
             
             timerEl.classList.remove('text-gray-400');
             
@@ -218,6 +180,16 @@
             const minutes = Math.floor(gameState.mainTimeLeft / 60);
             const seconds = gameState.mainTimeLeft % 60;
             timerEl.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            
+            const storedState = JSON.parse(localStorage.getItem('signalNoiseGameState'));
+             if (storedState) {
+                gameState.teams = storedState.teams;
+                const allSubmitted = gameState.teams.every(t => t.hasSubmitted);
+                if (allSubmitted) {
+                    endRound();
+                }
+            }
+
             if (gameState.mainTimeLeft <= 0) {
                 endRound();
             }
@@ -227,76 +199,18 @@
         function endRound() {
             clearInterval(gameState.mainTimerInterval);
             gameState.gameActive = false;
-            endRoundBtn.classList.add('hidden');
             startRoundBtn.classList.remove('hidden');
-            caseFileStatus.textContent = "Round ended. Awaiting diagnoses.";
-            showDiagnosisModal();
+            startRoundBtn.disabled = false;
+            caseFileStatus.textContent = "Round ended. Calculating scores...";
+            scoreRound();
             updateLocalStorage(); 
-        }
-        
-        function showDetailedScoreboard() {
-            const storedState = JSON.parse(localStorage.getItem('signalNoiseGameState'));
-            if (!storedState) return;
-
-            detailedScoreboardContent.innerHTML = `
-                <div class="grid grid-cols-3 gap-4 text-center font-bold border-b pb-2 mb-2 text-gray-600">
-                    <span>Team</span>
-                    <span>Score</span>
-                    <span>Jokers Left</span>
-                </div>
-            `;
-            const sortedTeams = [...storedState.teams].sort((a, b) => b.score - a.score);
-            sortedTeams.forEach(team => {
-                const row = document.createElement('div');
-                row.className = `grid grid-cols-3 gap-4 text-center p-2 rounded-md hover:bg-gray-100 items-center`;
-                row.innerHTML = `
-                    <span class="font-semibold text-left">${team.name}</span>
-                    <span class="font-bold text-xl">${team.score}</span>
-                    <span>${team.jokerAvailable ? '1' : '0'}</span>
-                `;
-                detailedScoreboardContent.appendChild(row);
-            });
-
-            detailedScoreboardPage.classList.remove('hidden');
-            setTimeout(() => detailedScoreboardPage.classList.remove('opacity-0'), 10);
-        }
-
-        function hideDetailedScoreboard() {
-            detailedScoreboardPage.classList.add('opacity-0');
-            setTimeout(() => detailedScoreboardPage.classList.add('hidden'), 300);
-        }
-        
-        function showDiagnosisModal() {
-            diagnosisDisplay.innerHTML = '';
-            const storedState = JSON.parse(localStorage.getItem('signalNoiseGameState'));
-            if (storedState) {
-                gameState.teams = storedState.teams;
-            }
-
-            gameState.teams.forEach(team => {
-                const teamDiv = document.createElement('div');
-                const hasSubmitted = team.diagnosis.rootCause || team.diagnosis.goal;
-                teamDiv.className = `p-4 border rounded-lg ${hasSubmitted ? 'bg-green-50 border-green-300' : 'bg-gray-50'}`;
-                teamDiv.innerHTML = `
-                    <h4 class="font-bold text-lg mb-2 flex justify-between items-center">
-                        <span>${team.name} ${team.jokerActive ? '<span class="text-sm text-yellow-600 font-semibold">(Joker Active)</span>' : ''}</span>
-                        <span class="text-sm font-medium ${hasSubmitted ? 'text-green-600' : 'text-gray-500'}">${hasSubmitted ? 'Submitted' : 'Not submitted'}</span>
-                    </h4>
-                    <p class="text-sm text-gray-500">Root Cause:</p>
-                    <p class="font-semibold mb-2">${team.diagnosis.rootCause || '...'}</p>
-                    <p class="text-sm text-gray-500">Business Goal:</p>
-                    <p class="font-semibold">${team.diagnosis.goal || '...'}</p>
-                `;
-                diagnosisDisplay.appendChild(teamDiv);
-            });
-
-            diagnosisModal.classList.remove('hidden');
-            setTimeout(() => diagnosisModal.classList.remove('opacity-0'), 10);
         }
 
         async function scoreRound() {
-            scoreRoundBtn.disabled = true;
-            scoreRoundBtn.textContent = 'Scoring...';
+            const storedState = JSON.parse(localStorage.getItem('signalNoiseGameState'));
+            if (storedState) gameState.teams = storedState.teams;
+
+            let roundScores = [];
 
             for (const team of gameState.teams) {
                 const { rootCause, goal } = team.diagnosis;
@@ -308,78 +222,57 @@
                 }
                 
                 if (team.jokerActive) {
-                    finalPoints *= 2;
+                    finalPoints += 20; // Joker bonus
                     team.jokerAvailable = false;
                 }
                 
                 team.score += finalPoints;
+                roundScores.push({ teamId: team.id, score: finalPoints });
             }
             
-            alert("Scores calculated!");
-
-            gameState.currentCaseFile.tenTenAnswer = await getAIModelAnswer();
-
-            diagnosisModal.classList.add('opacity-0');
-            setTimeout(() => diagnosisModal.classList.add('hidden'), 300);
-            
-            scoreRoundBtn.disabled = false;
-            scoreRoundBtn.textContent = 'Calculate Scores & Reveal Answers';
-            
+            alert("Scores calculated! Check the team room for results.");
             updateLocalStorage();
         }
 
-        async function makeApiCall(action, payload) {
+        async function makeApiCall(prompt, schema) {
+            const payload = {
+                contents: [{ role: "user", parts: [{ text: prompt }] }],
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: schema
+                }
+            };
             try {
-                const response = await fetch('/api/proxy', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action, payload })
-                });
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 if (!response.ok) throw new Error(`API request failed: ${response.status}`);
-                return await response.json();
-            } catch (error) {
-                console.error("API Call Error:", error);
-                return null;
-            }
+                const result = await response.json();
+                return JSON.parse(result.candidates[0].content.parts[0].text);
+            } catch (error) { console.error("API Call Error:", error); return null; }
         }
 
         async function generateNewCaseFile() {
-            // This now calls the secure worker instead of the API directly
-            return makeApiCall('generateCase');
-        }
-        
-        async function scoreDiagnosis(submittedRootCause, submittedGoal) {
-            return makeApiCall('scoreDiagnosis', {
-                signal: gameState.currentCaseFile.signal,
-                submittedRootCause,
-                submittedGoal
-            });
-        }
-        
-        async function getAIModelAnswer() {
-            return makeApiCall('getModelAnswer', {
-                caseFile: gameState.currentCaseFile
-            });
+             const topics = ["SaaS Platform", "E-commerce Website", "Internal IT Project", "Healthcare Software"];
+             const roles = ["Customer Success Manager", "Project Manager"];
+             const randomTopic = topics[Math.floor(Math.random() * topics.length)];
+             const randomRole = roles[Math.floor(Math.random() * roles.length)];
+             const generationPrompt = `Generate a new, unique case file for a business simulation game. The theme is: ${randomTopic} for a ${randomRole}. The JSON object must have "title", "noise", and "signal" properties. "signal" must contain "rootCause" and "goal".`;
+            const schema = { type: "OBJECT", properties: { "title": { "type": "STRING" }, "noise": { "type": "STRING" }, "signal": { "type": "OBJECT", "properties": { "rootCause": { "type": "STRING" }, "goal": { "type": "STRING" }}}} };
+            return makeApiCall(generationPrompt, schema);
         }
 
-        // Event Listeners
-        startRoundBtn.addEventListener('click', startNewRound);
-        endRoundBtn.addEventListener('click', endRound);
-        scoreboardIcon.addEventListener('click', showDetailedScoreboard);
-        closeScoreboardBtn.addEventListener('click', hideDetailedScoreboard);
-        scoreRoundBtn.addEventListener('click', scoreRound);
-        
-        window.addEventListener('storage', (event) => {
-            if (event.key === 'signalNoiseGameState') {
-                const storedState = JSON.parse(event.newValue);
-                if (storedState) {
-                    gameState = storedState;
-                    if (diagnosisModal.classList.contains('hidden') === false) {
-                        showDiagnosisModal();
-                    }
-                }
-            }
-        });
+        async function scoreDiagnosis(submittedRootCause, submittedGoal) {
+            const { signal } = gameState.currentCaseFile;
+            const prompt = `You are a game judge. Compare the user's submitted diagnosis with the correct answer.
+            CORRECT ROOT CAUSE: "${signal.rootCause}"
+            CORRECT GOAL: "${signal.goal}"
+            USER'S SUBMITTED ROOT CAUSE: "${submittedRootCause}"
+            USER'S SUBMITTED GOAL: "${submittedGoal}"
+            Return a JSON object with "correctRootCause" (boolean) and "correctGoal" (boolean).`;
+            const schema = { type: "OBJECT", properties: { "correctRootCause": { "type": "BOOLEAN" }, "correctGoal": { "type": "BOOLEAN" }} };
+            return makeApiCall(prompt, schema);
+        }
 
         initializeGame();
     </script>
