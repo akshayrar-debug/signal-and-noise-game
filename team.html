@@ -20,6 +20,20 @@
             0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
             50% { transform: scale(1.05); box-shadow: 0 0 10px 10px rgba(34, 197, 94, 0); }
         }
+        .submitted-overlay { position: relative; }
+        .submitted-overlay::after {
+            content: 'Submitted! Waiting for moderator...';
+            position: absolute;
+            inset: 0;
+            background-color: rgba(249, 250, 251, 0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #4b5563;
+            border-radius: 0.5rem;
+        }
         details > summary { list-style: none; cursor: pointer; }
         details > summary::-webkit-details-marker { display: none; }
     </style>
@@ -76,7 +90,7 @@
             <!-- Right Panel: Diagnosis -->
             <div id="diagnosis-panel" class="bg-white p-6 rounded-lg shadow-lg hidden">
                 <h2 class="text-2xl font-bold text-center mb-4">Your Diagnosis</h2>
-                 <div class="space-y-4">
+                 <div id="diagnosis-form" class="space-y-4">
                     <div>
                         <label for="root-cause-input" class="block text-sm font-medium text-gray-700">Root Cause</label>
                         <textarea id="root-cause-input" rows="4" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" placeholder="What is the specific, underlying problem?"></textarea>
@@ -112,6 +126,7 @@
         const questionInput = document.getElementById('question-input');
         const askBtn = document.getElementById('ask-btn');
         const diagnosisPanel = document.getElementById('diagnosis-panel');
+        const diagnosisForm = document.getElementById('diagnosis-form');
         const rootCauseInput = document.getElementById('root-cause-input');
         const goalInput = document.getElementById('goal-input');
         const submitDiagnosisBtn = document.getElementById('submit-diagnosis-btn');
@@ -158,8 +173,7 @@
             prepPhaseDisplay.classList.toggle('hidden', !state.prepActive);
             interactionArea.classList.toggle('hidden', !state.gameActive);
             diagnosisPanel.classList.toggle('hidden', !state.gameActive);
-            submitDiagnosisBtn.disabled = !state.gameActive;
-
+            
             roundNumberEl.textContent = state.round || 1;
             const timerValue = state.prepActive ? state.prepTimeLeft : state.mainTimeLeft;
             const minutes = Math.floor(timerValue / 60);
@@ -175,8 +189,15 @@
                 jokerBtn.classList.toggle('bg-green-500', myTeam.jokerActive);
                 jokerBtn.classList.toggle('text-white', myTeam.jokerActive);
                 jokerBtn.classList.toggle('joker-active-btn', myTeam.jokerActive);
-            }
 
+                const hasSubmitted = myTeam.diagnosis.rootCause || myTeam.diagnosis.goal;
+                diagnosisForm.classList.toggle('submitted-overlay', hasSubmitted);
+                if (hasSubmitted) {
+                    rootCauseInput.value = myTeam.diagnosis.rootCause;
+                    goalInput.value = myTeam.diagnosis.goal;
+                }
+            }
+            
             chatBox.innerHTML = '';
             const myTeamChat = state.chatHistory.filter(msg => msg.teamId === myTeamId || msg.author === 'AI' || msg.author === '10/10 Model Answer');
             myTeamChat.forEach(msg => {
@@ -223,18 +244,30 @@
             }
         }
 
-        function handleAskQuestion() {
+        async function handleAskQuestion() {
             const question = questionInput.value.trim();
             if (!question) return;
-            
-            const state = getGameState();
-            if (!state || !state.gameActive) return;
 
+            questionInput.value = '';
+            questionInput.disabled = true;
+            askBtn.disabled = true;
+
+            const state = getGameState();
             const myTeam = state.teams.find(t => t.id === myTeamId);
             state.chatHistory.push({ teamId: myTeamId, author: myTeam.name, text: question, type: 'team-question' });
-            localStorage.setItem('signalNoiseGameState', JSON.stringify(state));
             
-            questionInput.value = '';
+            const aiEval = await getAIResponseWithScore(question, state.currentCaseFile);
+            if (aiEval) {
+                 state.chatHistory.push({ author: 'AI', text: aiEval.response, type: 'ai-response', feedback: { score: aiEval.score, justification: aiEval.justification } });
+                 myTeam.score += aiEval.score;
+            }
+            
+            localStorage.setItem('signalNoiseGameState', JSON.stringify(state));
+            renderUI();
+            
+            questionInput.disabled = false;
+            askBtn.disabled = false;
+            questionInput.focus();
         }
 
         function submitDiagnosis() {
@@ -245,9 +278,26 @@
             myTeam.diagnosis.rootCause = rootCauseInput.value;
             myTeam.diagnosis.goal = goalInput.value;
             localStorage.setItem('signalNoiseGameState', JSON.stringify(state));
-            submitDiagnosisBtn.textContent = 'Submitted!';
-            submitDiagnosisBtn.disabled = true;
-            alert('Your diagnosis has been submitted to the moderator.');
+            renderUI();
+        }
+
+        async function getAIResponseWithScore(question, caseFile) {
+            const { noise, signal } = caseFile;
+            const prompt = `You are a role-playing AI and a game judge. First, role-play as a frustrated customer based on the scenario. Second, evaluate the user's question.
+            SCENARIO: ${noise}
+            SECRET INFO: The root cause is "${signal.rootCause}". The real goal is "${signal.goal}".
+            USER'S QUESTION: "${question}"
+            Return a JSON object with "response" (string), "score" (number, -5 for bad, 5 for good), and "justification" (string).`;
+            const schema = { type: "OBJECT", properties: { "response": { "type": "STRING" }, "score": { "type": "NUMBER" }, "justification": { "type": "STRING" }} };
+            const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json", responseSchema: schema } };
+            try {
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!response.ok) throw new Error(`API request failed: ${response.status}`);
+                const result = await response.json();
+                return JSON.parse(result.candidates[0].content.parts[0].text);
+            } catch (error) { console.error("API Call Error:", error); return null; }
         }
 
         const savedTeamId = sessionStorage.getItem('signalNoiseTeamId');
