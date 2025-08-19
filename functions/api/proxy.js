@@ -20,7 +20,12 @@ export async function onRequestPost(context) {
         // Determine which action to perform based on the client's request
         switch (action) {
             case 'generateCase':
-                prompt = `Generate a new, unique case file for a business simulation game. The JSON object must have "title", "noise", and "signal" properties. "signal" must contain "rootCause" and "goal".`;
+                const topics = ["SaaS Platform", "E-commerce Website", "Internal IT Project", "Healthcare Software", "Financial Services App", "Logistics Management"];
+                const roles = ["Customer Success Manager", "Project Manager"];
+                const randomTopic = topics[Math.floor(Math.random() * topics.length)];
+                const randomRole = roles[Math.floor(Math.random() * roles.length)];
+
+                prompt = `Generate a new, unique case file for a business simulation game. The game helps a ${randomRole} improve their probing skills. The theme for this case file should be: ${randomTopic}. The JSON object must have "title", "noise", and "signal" properties. "signal" must contain "rootCause" and "goal".`;
                 schema = { type: "OBJECT", properties: { "title": { "type": "STRING" }, "noise": { "type": "STRING" }, "signal": { "type": "OBJECT", "properties": { "rootCause": { "type": "STRING" }, "goal": { "type": "STRING" }}}} };
                 break;
             
