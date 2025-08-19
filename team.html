@@ -37,7 +37,8 @@
             <h1 class="text-4xl font-bold text-gray-900">Signal & Noise <span id="team-room-title" class="text-green-600">(Team Room)</span></h1>
         </header>
 
-        <main class="grid grid-cols-1 gap-8">
+        <main class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Left Panel: Investigation -->
             <div class="bg-white p-6 rounded-lg shadow-lg">
                 <div class="flex justify-between items-center mb-4">
                     <h2 id="round-title" class="text-2xl font-bold">Round <span id="round-number">1</span></h2>
@@ -61,12 +62,31 @@
 
                     <div id="interaction-area" class="hidden">
                         <div id="chat-box" class="h-96 overflow-y-auto border rounded-lg p-4 mb-4 bg-gray-50"></div>
-                        <p class="text-center text-gray-600 font-semibold">Submit your final diagnosis when ready.</p>
+                        <div class="flex items-center gap-4">
+                            <input type="text" id="question-input" class="flex-grow p-2 border rounded-md" placeholder="Ask a question...">
+                            <button id="ask-btn" class="bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700">Ask</button>
+                        </div>
                     </div>
                      <div id="start-prompt" class="text-center py-16">
                         <p class="text-xl text-gray-500">Waiting for the moderator to start the round...</p>
                     </div>
                 </div>
+            </div>
+
+            <!-- Right Panel: Diagnosis -->
+            <div id="diagnosis-panel" class="bg-white p-6 rounded-lg shadow-lg hidden">
+                <h2 class="text-2xl font-bold text-center mb-4">Your Diagnosis</h2>
+                 <div class="space-y-4">
+                    <div>
+                        <label for="root-cause-input" class="block text-sm font-medium text-gray-700">Root Cause</label>
+                        <textarea id="root-cause-input" rows="4" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="What is the specific, underlying problem?"></textarea>
+                    </div>
+                    <div>
+                        <label for="goal-input" class="block text-sm font-medium text-gray-700">Business Goal</label>
+                        <textarea id="goal-input" rows="4" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="What is the true business outcome the stakeholder wants?"></textarea>
+                    </div>
+                    <button id="submit-diagnosis-btn" class="w-full bg-purple-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-purple-700 disabled:bg-gray-400">Submit Diagnosis</button>
+                 </div>
             </div>
         </main>
     </div>
@@ -91,6 +111,12 @@
         const prepTimerEl = document.getElementById('prep-timer');
         const teamPrepActions = document.getElementById('team-prep-actions');
         const jokerBtn = document.getElementById('joker-btn');
+        const questionInput = document.getElementById('question-input');
+        const askBtn = document.getElementById('ask-btn');
+        const diagnosisPanel = document.getElementById('diagnosis-panel');
+        const rootCauseInput = document.getElementById('root-cause-input');
+        const goalInput = document.getElementById('goal-input');
+        const submitDiagnosisBtn = document.getElementById('submit-diagnosis-btn');
 
         function setupTeamSelection() {
             for (let i = 1; i <= 5; i++) {
@@ -121,11 +147,11 @@
                 startPrompt.classList.remove('hidden');
                 interactionArea.classList.add('hidden');
                 caseFileDisplay.classList.add('hidden');
+                diagnosisPanel.classList.add('hidden');
                 prepPhaseDisplay.classList.add('hidden');
                 return;
             }
 
-            // Round and Timer
             roundNumberEl.textContent = state.round || 1;
             const timerValue = state.prepActive ? state.prepTimeLeft : state.mainTimeLeft;
             const minutes = Math.floor(timerValue / 60);
@@ -134,22 +160,24 @@
             timerEl.className = `text-3xl font-bold ${state.gameActive ? 'text-red-500' : 'text-gray-400'}`;
             prepTimerEl.textContent = `00:${state.prepTimeLeft.toString().padStart(2, '0')}`;
 
-            // Phase display
             prepPhaseDisplay.classList.toggle('hidden', !state.prepActive);
-            interactionArea.classList.toggle('hidden', state.prepActive);
+            interactionArea.classList.toggle('hidden', !state.gameActive);
+            diagnosisPanel.classList.toggle('hidden', !state.gameActive);
 
             if (state.prepActive || state.gameActive) {
                 startPrompt.classList.add('hidden');
                 caseFileDisplay.classList.remove('hidden');
                 caseFileTitle.textContent = state.currentCaseFile.title;
                 caseFileText.textContent = state.currentCaseFile.noise;
+                submitDiagnosisBtn.disabled = false;
             } else {
                 startPrompt.classList.remove('hidden');
                 caseFileDisplay.classList.add('hidden');
                 interactionArea.classList.add('hidden');
+                diagnosisPanel.classList.add('hidden');
+                submitDiagnosisBtn.disabled = true;
             }
             
-            // Joker Button Logic
             const myTeam = state.teams.find(t => t.id === myTeamId);
             if (myTeam) {
                 jokerBtn.disabled = !myTeam.jokerAvailable;
@@ -159,12 +187,27 @@
                 jokerBtn.classList.toggle('joker-active-btn', myTeam.jokerActive);
             }
 
-            // Chat History
             chatBox.innerHTML = '';
-            state.chatHistory.forEach(msg => {
+            const myTeamChat = state.chatHistory.filter(msg => msg.teamId === myTeamId || msg.author === 'AI' || msg.author === '10/10 Model Answer');
+            myTeamChat.forEach(msg => {
                 const messageEl = document.createElement('div');
                 messageEl.className = `p-3 rounded-lg mb-2 ${msg.type}`;
                 messageEl.innerHTML = `<p><span class="font-bold">${msg.author}:</span> ${msg.text}</p>`;
+                if (msg.feedback) {
+                    const detailsEl = document.createElement('details');
+                    detailsEl.className = 'mt-2';
+                    const summaryEl = document.createElement('summary');
+                    summaryEl.className = 'text-sm text-blue-600 font-semibold cursor-pointer';
+                    summaryEl.textContent = 'Show AI Feedback';
+                    const feedbackEl = document.createElement('div');
+                    const scoreClass = msg.feedback.score > 0 ? 'positive' : 'negative';
+                    const scoreSign = msg.feedback.score > 0 ? '+' : '';
+                    feedbackEl.className = `score-feedback ${scoreClass}`;
+                    feedbackEl.innerHTML = `<strong>AI Score: ${scoreSign}${msg.feedback.score}.</strong> ${msg.feedback.justification}`;
+                    detailsEl.appendChild(summaryEl);
+                    detailsEl.appendChild(feedbackEl);
+                    messageEl.appendChild(detailsEl);
+                }
                 chatBox.appendChild(messageEl);
             });
             
@@ -190,6 +233,62 @@
             }
         }
 
+        async function handleAskQuestion() {
+            const question = questionInput.value.trim();
+            if (!question) return;
+
+            questionInput.value = '';
+            questionInput.disabled = true;
+            askBtn.disabled = true;
+
+            const state = getGameState();
+            const myTeam = state.teams.find(t => t.id === myTeamId);
+            state.chatHistory.push({ teamId: myTeamId, author: myTeam.name, text: question, type: 'team-question' });
+            
+            const aiEval = await getAIResponseWithScore(question, state.currentCaseFile);
+            if (aiEval) {
+                 state.chatHistory.push({ author: 'AI', text: aiEval.response, type: 'ai-response', feedback: { score: aiEval.score, justification: aiEval.justification } });
+                 myTeam.score += aiEval.score;
+            }
+            
+            localStorage.setItem('signalNoiseGameState', JSON.stringify(state));
+            renderUI();
+            
+            questionInput.disabled = false;
+            askBtn.disabled = false;
+            questionInput.focus();
+        }
+
+        function submitDiagnosis() {
+            const state = getGameState();
+            const myTeam = state.teams.find(t => t.id === myTeamId);
+            myTeam.diagnosis.rootCause = rootCauseInput.value;
+            myTeam.diagnosis.goal = goalInput.value;
+            localStorage.setItem('signalNoiseGameState', JSON.stringify(state));
+            submitDiagnosisBtn.textContent = 'Submitted!';
+            submitDiagnosisBtn.disabled = true;
+            alert('Your diagnosis has been submitted to the moderator.');
+        }
+
+        async function getAIResponseWithScore(question, caseFile) {
+            const { noise, signal } = caseFile;
+            const prompt = `You are a role-playing AI and a game judge. First, role-play as a frustrated customer based on the scenario. Second, evaluate the user's question.
+            SCENARIO: ${noise}
+            SECRET INFO: The root cause is "${signal.rootCause}". The real goal is "${signal.goal}".
+            USER'S QUESTION: "${question}"
+            Return a JSON object with "response" (string), "score" (number, -5 for bad, 5 for good), and "justification" (string).`;
+            const schema = { type: "OBJECT", properties: { "response": { "type": "STRING" }, "score": { "type": "NUMBER" }, "justification": { "type": "STRING" }} };
+            const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json", responseSchema: schema } };
+            try {
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!response.ok) throw new Error(`API request failed: ${response.status}`);
+                const result = await response.json();
+                return JSON.parse(result.candidates[0].content.parts[0].text);
+            } catch (error) { console.error("API Call Error:", error); return null; }
+        }
+
         const savedTeamId = sessionStorage.getItem('signalNoiseTeamId');
         if (savedTeamId) {
             selectTeam(parseInt(savedTeamId));
@@ -200,6 +299,9 @@
         setInterval(renderUI, 1000);
         
         jokerBtn.addEventListener('click', handleJokerClick);
+        askBtn.addEventListener('click', handleAskQuestion);
+        questionInput.addEventListener('keyup', (e) => { if (e.key === 'Enter') handleAskQuestion(); });
+        submitDiagnosisBtn.addEventListener('click', submitDiagnosis);
 
         renderUI();
     </script>
