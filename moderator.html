@@ -9,9 +9,6 @@
     <style>
         body { font-family: 'Inter', sans-serif; }
         .case-file-card { background-color: #fdfd96; border-left: 5px solid #f0e68c; }
-        .ai-response { background-color: #e0f2fe; }
-        .team-question { background-color: #d1fae5; }
-        .model-answer { background-color: #e9d5ff; border-left: 4px solid #8b5cf6; }
         .spinner { border-top-color: #3498db; animation: spin 1s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
         #detailed-scoreboard-page, #diagnosis-modal { transition: opacity 0.3s ease-in-out; }
@@ -90,6 +87,25 @@
             gameActive: false,
         };
 
+        const staticCaseFiles = [
+            {
+                title: "The Frustrated User",
+                noise: `You get an email from Tom, a new user at a key account.\n\nSubject: Your software is impossible!\n\n"I'm trying to do my job and your platform is just not user-friendly. I spent an hour trying to get a simple task done and got nowhere. I don't have time for this. My boss told me we have to use this, but I'm ready to go back to my old spreadsheets."`,
+                signal: {
+                    rootCause: "The user is trying to use the 'Bulk Data Import' feature but doesn't have the correct admin permissions enabled for his user role.",
+                    goal: "He needs to import a list of 500 new leads from a CSV file to start his weekly outreach campaign."
+                }
+            },
+            {
+                title: "The Last-Minute Change",
+                noise: `You get a call from Susan, the Head of Marketing, about the new landing page project that's due to launch next week.\n\nVoicemail: "Hi, quick one. I just saw the final design and the main banner needs to be video, not a static image. It's a must-have for the campaign. It should be an easy change, just swap the file. Let's get it done before the launch. Thanks!"`,
+                signal: {
+                    rootCause: "Susan saw a competitor's new website that uses video and is having a reactive moment, fearing the new landing page will look dated on launch.",
+                    goal: "She wants to ensure the new landing page has a high-impact, modern feel that will capture visitor attention immediately and increase the 'time on page' metric for her campaign."
+                }
+            }
+        ];
+
         const caseFileStatus = document.getElementById('case-file-status');
         const startRoundBtn = document.getElementById('start-round-btn');
         const endRoundBtn = document.getElementById('end-round-btn');
@@ -119,20 +135,10 @@
             localStorage.setItem('signalNoiseGameState', JSON.stringify(gameState));
         }
 
-        async function startNewRound() {
-            if (startRoundBtn.disabled) return;
+        function startNewRound() {
             clearInterval(gameState.mainTimerInterval);
             
-            startRoundBtn.disabled = true;
-            caseFileStatus.innerHTML = '<div class="flex items-center justify-center"><div class="spinner w-5 h-5 mr-2"></div>Generating...</div>';
-            
-            const newCaseFile = await generateNewCaseFile();
-            if (!newCaseFile) {
-                alert("Failed to generate case file.");
-                startRoundBtn.disabled = false;
-                caseFileStatus.textContent = "Error. Try again.";
-                return;
-            }
+            const newCaseFile = staticCaseFiles[gameState.round % staticCaseFiles.length];
             
             gameState.round++;
             gameState.currentCaseFile = newCaseFile;
@@ -180,7 +186,6 @@
             gameState.gameActive = false;
             endRoundBtn.classList.add('hidden');
             startRoundBtn.classList.remove('hidden');
-            startRoundBtn.disabled = false;
             caseFileStatus.textContent = "Round ended. Awaiting diagnoses.";
             showDiagnosisModal();
             updateLocalStorage(); 
@@ -244,16 +249,14 @@
 
         async function scoreRound() {
             scoreRoundBtn.disabled = true;
-            scoreRoundBtn.textContent = 'AI is Scoring All Teams...';
+            scoreRoundBtn.textContent = 'Scoring...';
 
             for (const team of gameState.teams) {
                 const { rootCause, goal } = team.diagnosis;
                 let finalPoints = 0;
-                if (rootCause || goal) {
-                    const finalScore = await scoreDiagnosis(rootCause, goal);
-                    if (finalScore.correctRootCause) finalPoints += 10;
-                    if (finalScore.correctGoal) finalPoints += 10;
-                }
+                // This is a simplified check for static mode
+                if (rootCause.toLowerCase().includes('permission')) finalPoints += 10;
+                if (goal.toLowerCase().includes('import')) finalPoints += 10;
                 
                 if (team.jokerActive) {
                     finalPoints *= 2;
@@ -263,10 +266,9 @@
                 team.score += finalPoints;
             }
             
-            const modelAnswer = await getAIModelAnswer();
-            alert("Scores calculated! Model answer is now available in the team rooms.");
+            alert("Scores calculated!");
 
-            gameState.currentCaseFile.tenTenAnswer = modelAnswer;
+            gameState.currentCaseFile.tenTenAnswer = "The ideal answer would identify that the user lacks permissions for the specific feature they are trying to use.";
 
             diagnosisModal.classList.add('opacity-0');
             setTimeout(() => diagnosisModal.classList.add('hidden'), 300);
@@ -275,52 +277,6 @@
             scoreRoundBtn.textContent = 'Calculate Scores & Reveal Answers';
             
             updateLocalStorage();
-        }
-
-        async function makeApiCall(prompt, schema, isTextOnly = false) {
-             const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
-            if (schema) {
-                payload.generationConfig = { responseMimeType: "application/json", responseSchema: schema };
-            }
-            try {
-                const apiKey = "";
-                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                if (!response.ok) throw new Error(`API request failed: ${response.status}`);
-                const result = await response.json();
-                const text = result.candidates[0].content.parts[0].text;
-                return isTextOnly ? text : JSON.parse(text);
-            } catch (error) { console.error("API Call Error:", error); return null; }
-        }
-
-        async function generateNewCaseFile() {
-             const topics = ["SaaS Platform", "E-commerce Website", "Internal IT Project", "Healthcare Software"];
-             const roles = ["Customer Success Manager", "Project Manager"];
-             const randomTopic = topics[Math.floor(Math.random() * topics.length)];
-             const randomRole = roles[Math.floor(Math.random() * roles.length)];
-             const generationPrompt = `Generate a new, unique case file for a business simulation game. The theme is: ${randomTopic} for a ${randomRole}. The JSON object must have "title", "noise", and "signal" properties. "signal" must contain "rootCause" and "goal".`;
-            const schema = { type: "OBJECT", properties: { "title": { "type": "STRING" }, "noise": { "type": "STRING" }, "signal": { "type": "OBJECT", "properties": { "rootCause": { "type": "STRING" }, "goal": { "type": "STRING" }}}} };
-            return makeApiCall(generationPrompt, schema);
-        }
-        
-        async function scoreDiagnosis(submittedRootCause, submittedGoal) {
-            const { signal } = gameState.currentCaseFile;
-            const prompt = `You are a game judge. Compare the user's submitted diagnosis with the correct answer.
-            CORRECT ROOT CAUSE: "${signal.rootCause}"
-            CORRECT GOAL: "${signal.goal}"
-            USER'S SUBMITTED ROOT CAUSE: "${submittedRootCause}"
-            USER'S SUBMITTED GOAL: "${submittedGoal}"
-            Return a JSON object with "correctRootCause" (boolean), "correctGoal" (boolean), and "feedback" (string).`;
-            const schema = { type: "OBJECT", properties: { "correctRootCause": { "type": "BOOLEAN" }, "correctGoal": { "type": "BOOLEAN" }, "feedback": { "type": "STRING" }} };
-            return makeApiCall(prompt, schema);
-        }
-        
-        async function getAIModelAnswer() {
-            const { signal } = gameState.currentCaseFile;
-            const prompt = `You are an expert consultant. Based on the case file, provide a brief summary of a perfect "10/10" diagnosis. Explain the ideal thought process, key questions, and final conclusion.
-            REAL SITUATION: Root cause is "${signal.rootCause}". Real goal is "${signal.goal}".
-            Return a single string with your summary.`;
-            return makeApiCall(prompt, null, true);
         }
 
         // Event Listeners
