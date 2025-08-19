@@ -195,6 +195,11 @@
                 if (hasSubmitted) {
                     rootCauseInput.value = myTeam.diagnosis.rootCause;
                     goalInput.value = myTeam.diagnosis.goal;
+                    submitDiagnosisBtn.textContent = 'Submitted!';
+                    submitDiagnosisBtn.disabled = true;
+                } else {
+                    submitDiagnosisBtn.textContent = 'Submit Diagnosis';
+                    submitDiagnosisBtn.disabled = !state.gameActive;
                 }
             }
             
