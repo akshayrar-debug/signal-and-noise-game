@@ -150,7 +150,6 @@
                 return;
             }
 
-            // --- Corrected Visibility Logic ---
             startPrompt.classList.add('hidden');
             caseFileDisplay.classList.remove('hidden');
             caseFileTitle.textContent = state.currentCaseFile.title;
@@ -161,7 +160,6 @@
             diagnosisPanel.classList.toggle('hidden', !state.gameActive);
             submitDiagnosisBtn.disabled = !state.gameActive;
 
-            // --- Timer and Round Logic ---
             roundNumberEl.textContent = state.round || 1;
             const timerValue = state.prepActive ? state.prepTimeLeft : state.mainTimeLeft;
             const minutes = Math.floor(timerValue / 60);
@@ -170,7 +168,6 @@
             timerEl.className = `text-3xl font-bold ${state.gameActive ? 'text-red-500' : 'text-gray-400'}`;
             prepTimerEl.textContent = `00:${state.prepTimeLeft.toString().padStart(2, '0')}`;
 
-            // --- Joker Button Logic ---
             const myTeam = state.teams.find(t => t.id === myTeamId);
             if (myTeam) {
                 jokerBtn.disabled = !myTeam.jokerAvailable;
@@ -180,7 +177,6 @@
                 jokerBtn.classList.toggle('joker-active-btn', myTeam.jokerActive);
             }
 
-            // --- Chat History Logic ---
             chatBox.innerHTML = '';
             const myTeamChat = state.chatHistory.filter(msg => msg.teamId === myTeamId || msg.author === 'AI' || msg.author === '10/10 Model Answer');
             myTeamChat.forEach(msg => {
@@ -227,34 +223,24 @@
             }
         }
 
-        async function handleAskQuestion() {
+        function handleAskQuestion() {
             const question = questionInput.value.trim();
             if (!question) return;
-
-            questionInput.value = '';
-            questionInput.disabled = true;
-            askBtn.disabled = true;
-
+            
             const state = getGameState();
+            if (!state || !state.gameActive) return;
+
             const myTeam = state.teams.find(t => t.id === myTeamId);
             state.chatHistory.push({ teamId: myTeamId, author: myTeam.name, text: question, type: 'team-question' });
-            
-            const aiEval = await getAIResponseWithScore(question, state.currentCaseFile);
-            if (aiEval) {
-                 state.chatHistory.push({ author: 'AI', text: aiEval.response, type: 'ai-response', feedback: { score: aiEval.score, justification: aiEval.justification } });
-                 myTeam.score += aiEval.score;
-            }
-            
             localStorage.setItem('signalNoiseGameState', JSON.stringify(state));
-            renderUI();
             
-            questionInput.disabled = false;
-            askBtn.disabled = false;
-            questionInput.focus();
+            questionInput.value = '';
         }
 
         function submitDiagnosis() {
             const state = getGameState();
+            if (!state || !state.gameActive) return;
+
             const myTeam = state.teams.find(t => t.id === myTeamId);
             myTeam.diagnosis.rootCause = rootCauseInput.value;
             myTeam.diagnosis.goal = goalInput.value;
@@ -262,25 +248,6 @@
             submitDiagnosisBtn.textContent = 'Submitted!';
             submitDiagnosisBtn.disabled = true;
             alert('Your diagnosis has been submitted to the moderator.');
-        }
-
-        async function getAIResponseWithScore(question, caseFile) {
-            const { noise, signal } = caseFile;
-            const prompt = `You are a role-playing AI and a game judge. First, role-play as a frustrated customer based on the scenario. Second, evaluate the user's question.
-            SCENARIO: ${noise}
-            SECRET INFO: The root cause is "${signal.rootCause}". The real goal is "${signal.goal}".
-            USER'S QUESTION: "${question}"
-            Return a JSON object with "response" (string), "score" (number, -5 for bad, 5 for good), and "justification" (string).`;
-            const schema = { type: "OBJECT", properties: { "response": { "type": "STRING" }, "score": { "type": "NUMBER" }, "justification": { "type": "STRING" }} };
-            const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json", responseSchema: schema } };
-            try {
-                const apiKey = "";
-                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                if (!response.ok) throw new Error(`API request failed: ${response.status}`);
-                const result = await response.json();
-                return JSON.parse(result.candidates[0].content.parts[0].text);
-            } catch (error) { console.error("API Call Error:", error); return null; }
         }
 
         const savedTeamId = sessionStorage.getItem('signalNoiseTeamId');
