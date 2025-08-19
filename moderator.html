@@ -361,14 +361,16 @@
             setTimeout(() => detailedScoreboardPage.classList.add('hidden'), 300);
         }
 
-        async function makeApiCall(prompt, schema) {
+        async function makeApiCall(prompt, schema, isTextOnly = false) {
             const payload = {
-                contents: [{ role: "user", parts: [{ text: prompt }] }],
-                generationConfig: {
+                contents: [{ role: "user", parts: [{ text: prompt }] }]
+            };
+            if (schema) {
+                payload.generationConfig = {
                     responseMimeType: "application/json",
                     responseSchema: schema
-                }
-            };
+                };
+            }
             
             let attempt = 0;
             const maxAttempts = 3;
@@ -391,6 +393,10 @@
                     const result = await response.json();
                     if (!result.candidates || !result.candidates[0].content.parts[0].text) {
                         throw new Error("Invalid API response structure");
+                    }
+
+                    if (isTextOnly) {
+                        return result.candidates[0].content.parts[0].text;
                     }
                     return JSON.parse(result.candidates[0].content.parts[0].text);
 
@@ -425,15 +431,7 @@
             SECRET INFO: Root cause is "${signal.rootCause}". Real goal is "${signal.goal}".
             USER'S QUESTION: "${question}"
             Return only the role-played response as a single string.`;
-            const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
-            try {
-                const apiKey = "";
-                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                if (!response.ok) throw new Error(`API request failed: ${response.status}`);
-                const result = await response.json();
-                return result.candidates[0].content.parts[0].text;
-            } catch (error) { console.error("Error getting AI response:", error); return "I'm having trouble with that request."; }
+            return makeApiCall(prompt, null, true);
         }
         
         async function getAIModelAnswer() {
@@ -442,15 +440,7 @@
             INITIAL COMPLAINT: ${noise}
             REAL SITUATION: Root cause is "${signal.rootCause}". Real goal is "${signal.goal}".
             Return a single string with your summary.`;
-            const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
-            try {
-                const apiKey = "";
-                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                if (!response.ok) throw new Error(`API request failed: ${response.status}`);
-                const result = await response.json();
-                return result.candidates[0].content.parts[0].text;
-            } catch (error) { console.error("Error getting model answer:", error); return "Could not retrieve model answer."; }
+            return makeApiCall(prompt, null, true);
         }
 
         // Event Listeners
