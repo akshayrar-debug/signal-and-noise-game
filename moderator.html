@@ -97,25 +97,6 @@
             prepActive: false,
         };
 
-        const staticCaseFiles = [
-            {
-                title: "The Frustrated User",
-                noise: `You get an email from Tom, a new user at a key account.\n\nSubject: Your software is impossible!\n\n"I'm trying to do my job and your platform is just not user-friendly. I spent an hour trying to get a simple task done and got nowhere. I don't have time for this. My boss told me we have to use this, but I'm ready to go back to my old spreadsheets."`,
-                signal: {
-                    rootCause: "The user is trying to use the 'Bulk Data Import' feature but doesn't have the correct admin permissions enabled for his user role.",
-                    goal: "He needs to import a list of 500 new leads from a CSV file to start his weekly outreach campaign."
-                }
-            },
-            {
-                title: "The Last-Minute Change",
-                noise: `You get a call from Susan, the Head of Marketing, about the new landing page project that's due to launch next week.\n\nVoicemail: "Hi, quick one. I just saw the final design and the main banner needs to be video, not a static image. It's a must-have for the campaign. It should be an easy change, just swap the file. Let's get it done before the launch. Thanks!"`,
-                signal: {
-                    rootCause: "Susan saw a competitor's new website that uses video and is having a reactive moment, fearing the new landing page will look dated on launch.",
-                    goal: "She wants to ensure the new landing page has a high-impact, modern feel that will capture visitor attention immediately and increase the 'time on page' metric for her campaign."
-                }
-            }
-        ];
-
         const caseFileStatus = document.getElementById('case-file-status');
         const startRoundBtn = document.getElementById('start-round-btn');
         const endRoundBtn = document.getElementById('end-round-btn');
@@ -148,11 +129,21 @@
             localStorage.setItem('signalNoiseGameState', JSON.stringify(gameState));
         }
 
-        function startNewRound() {
+        async function startNewRound() {
+            if (startRoundBtn.disabled) return;
             clearInterval(gameState.prepTimerInterval);
             clearInterval(gameState.mainTimerInterval);
             
-            const newCaseFile = staticCaseFiles[gameState.round % staticCaseFiles.length];
+            startRoundBtn.disabled = true;
+            caseFileStatus.innerHTML = '<div class="flex items-center justify-center"><div class="spinner w-5 h-5 mr-2"></div>Generating...</div>';
+            
+            const newCaseFile = await generateNewCaseFile();
+            if (!newCaseFile) {
+                alert("Failed to generate a new case file. Please try again.");
+                startRoundBtn.disabled = false;
+                caseFileStatus.textContent = "Error. Try again.";
+                return;
+            }
             
             gameState.round++;
             gameState.currentCaseFile = newCaseFile;
@@ -310,9 +301,11 @@
             for (const team of gameState.teams) {
                 const { rootCause, goal } = team.diagnosis;
                 let finalPoints = 0;
-                // Simplified static check for offline mode
-                if (rootCause.toLowerCase().includes('permission') || rootCause.toLowerCase().includes('video')) finalPoints += 10;
-                if (goal.toLowerCase().includes('import') || goal.toLowerCase().includes('metric')) finalPoints += 10;
+                if (rootCause || goal) {
+                    const finalScore = await scoreDiagnosis(rootCause, goal);
+                    if (finalScore.correctRootCause) finalPoints += 10;
+                    if (finalScore.correctGoal) finalPoints += 10;
+                }
                 
                 if (team.jokerActive) {
                     finalPoints *= 2;
@@ -324,7 +317,7 @@
             
             alert("Scores calculated!");
 
-            gameState.currentCaseFile.tenTenAnswer = "The ideal answer would be determined by the AI based on the specific static case file for the round.";
+            gameState.currentCaseFile.tenTenAnswer = await getAIModelAnswer();
 
             diagnosisModal.classList.add('opacity-0');
             setTimeout(() => diagnosisModal.classList.add('hidden'), 300);
@@ -333,6 +326,40 @@
             scoreRoundBtn.textContent = 'Calculate Scores & Reveal Answers';
             
             updateLocalStorage();
+        }
+
+        async function makeApiCall(action, payload) {
+            try {
+                const response = await fetch('/api/proxy', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action, payload })
+                });
+                if (!response.ok) throw new Error(`API request failed: ${response.status}`);
+                return await response.json();
+            } catch (error) {
+                console.error("API Call Error:", error);
+                return null;
+            }
+        }
+
+        async function generateNewCaseFile() {
+            // This now calls the secure worker instead of the API directly
+            return makeApiCall('generateCase');
+        }
+        
+        async function scoreDiagnosis(submittedRootCause, submittedGoal) {
+            return makeApiCall('scoreDiagnosis', {
+                signal: gameState.currentCaseFile.signal,
+                submittedRootCause,
+                submittedGoal
+            });
+        }
+        
+        async function getAIModelAnswer() {
+            return makeApiCall('getModelAnswer', {
+                caseFile: gameState.currentCaseFile
+            });
         }
 
         // Event Listeners
