@@ -28,8 +28,8 @@
             </div>
         </div>
 
-        <main class="grid grid-cols-1 gap-8">
-            <div class="bg-white p-6 rounded-lg shadow-lg">
+        <main class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="lg:col-span-2 bg-white p-6 rounded-lg shadow-lg">
                 <div class="flex justify-between items-center mb-4">
                     <h2 id="round-title" class="text-2xl font-bold">Round <span id="round-number">1</span></h2>
                     <div id="timer" class="text-3xl font-bold text-gray-400">10:00</div>
@@ -40,7 +40,6 @@
                         <h3 class="text-lg font-semibold text-blue-800">Preparation Phase</h3>
                         <p class="text-blue-700">Teams are reviewing the case and activating Jokers.</p>
                         <div id="prep-timer" class="text-4xl font-bold text-blue-600 mt-2">00:30</div>
-                        <div id="joker-status-display" class="mt-4 text-sm text-gray-600"></div>
                     </div>
 
                      <div id="case-file-display" class="p-4 rounded-lg mb-6 case-file-card hidden">
@@ -50,6 +49,12 @@
                      <div id="start-prompt" class="text-center py-16">
                         <p class="text-xl text-gray-500">Click "Start New Round" to begin.</p>
                     </div>
+                </div>
+            </div>
+            <div class="lg:col-span-1 bg-white p-6 rounded-lg shadow-lg">
+                <h2 class="text-2xl font-bold text-center mb-6">Team Status</h2>
+                <div id="team-status-display" class="space-y-4">
+                    <!-- Team statuses will be populated here -->
                 </div>
             </div>
         </main>
@@ -78,7 +83,7 @@
         const startPrompt = document.getElementById('start-prompt');
         const prepPhaseDisplay = document.getElementById('prep-phase-display');
         const prepTimerEl = document.getElementById('prep-timer');
-        const jokerStatusDisplay = document.getElementById('joker-status-display');
+        const teamStatusDisplay = document.getElementById('team-status-display');
 
         function initializeGame() {
             localStorage.clear();
@@ -86,6 +91,7 @@
                 gameState.teams.push({ id: i, name: `Team ${i}`, score: 0, jokerAvailable: true, jokerActive: false, diagnosis: { rootCause: '', goal: '' }, hasSubmitted: false });
             }
             updateLocalStorage();
+            renderTeamStatus();
         }
 
         function updateLocalStorage() {
@@ -149,8 +155,7 @@
             const storedState = JSON.parse(localStorage.getItem('signalNoiseGameState'));
             if (storedState) {
                 gameState.teams = storedState.teams;
-                const activeJokers = gameState.teams.filter(t => t.jokerActive).map(t => t.name).join(', ');
-                jokerStatusDisplay.textContent = activeJokers ? `Jokers Active: ${activeJokers}` : 'No Jokers Active';
+                renderTeamStatus();
             }
 
             if (gameState.prepTimeLeft <= 0) {
@@ -184,6 +189,7 @@
             const storedState = JSON.parse(localStorage.getItem('signalNoiseGameState'));
              if (storedState) {
                 gameState.teams = storedState.teams;
+                renderTeamStatus();
                 const allSubmitted = gameState.teams.every(t => t.hasSubmitted);
                 if (allSubmitted) {
                     endRound();
@@ -204,6 +210,25 @@
             caseFileStatus.textContent = "Round ended. Calculating scores...";
             scoreRound();
             updateLocalStorage(); 
+        }
+
+        function renderTeamStatus() {
+            teamStatusDisplay.innerHTML = '';
+            gameState.teams.forEach(team => {
+                const teamDiv = document.createElement('div');
+                const hasSubmitted = team.hasSubmitted;
+                teamDiv.className = `p-4 border rounded-lg ${hasSubmitted ? 'bg-green-100 border-green-300' : 'bg-gray-50'}`;
+                teamDiv.innerHTML = `
+                    <h4 class="font-bold text-lg flex justify-between items-center">
+                        <span>${team.name}</span>
+                        <span class="text-sm font-medium ${hasSubmitted ? 'text-green-600' : 'text-gray-500'}">${hasSubmitted ? 'Submitted' : 'Pending'}</span>
+                    </h4>
+                    <p class="text-sm mt-1 ${team.jokerActive ? 'text-yellow-600 font-semibold' : 'text-gray-400'}">
+                        ${team.jokerActive ? 'Joker Active' : 'No Joker'}
+                    </p>
+                `;
+                teamStatusDisplay.appendChild(teamDiv);
+            });
         }
 
         async function scoreRound() {
@@ -273,6 +298,16 @@
             const schema = { type: "OBJECT", properties: { "correctRootCause": { "type": "BOOLEAN" }, "correctGoal": { "type": "BOOLEAN" }} };
             return makeApiCall(prompt, schema);
         }
+
+        window.addEventListener('storage', (event) => {
+            if (event.key === 'signalNoiseGameState') {
+                const storedState = JSON.parse(event.newValue);
+                if (storedState) {
+                    gameState = storedState;
+                    renderTeamStatus();
+                }
+            }
+        });
 
         initializeGame();
     </script>
