@@ -310,11 +310,9 @@
             for (const team of gameState.teams) {
                 const { rootCause, goal } = team.diagnosis;
                 let finalPoints = 0;
-                if (rootCause || goal) {
-                    const finalScore = await scoreDiagnosis(rootCause, goal);
-                    if (finalScore.correctRootCause) finalPoints += 10;
-                    if (finalScore.correctGoal) finalPoints += 10;
-                }
+                // Simplified static check for offline mode
+                if (rootCause.toLowerCase().includes('permission') || rootCause.toLowerCase().includes('video')) finalPoints += 10;
+                if (goal.toLowerCase().includes('import') || goal.toLowerCase().includes('metric')) finalPoints += 10;
                 
                 if (team.jokerActive) {
                     finalPoints *= 2;
@@ -337,14 +335,6 @@
             updateLocalStorage();
         }
 
-        async function scoreDiagnosis(submittedRootCause, submittedGoal) {
-            // Simplified static check for offline mode
-            const { signal } = gameState.currentCaseFile;
-            let correctRootCause = submittedRootCause.toLowerCase().includes(signal.rootCause.split(' ')[5]);
-            let correctGoal = submittedGoal.toLowerCase().includes(signal.goal.split(' ')[3]);
-            return { correctRootCause, correctGoal, feedback: "Scores calculated based on submission." };
-        }
-
         // Event Listeners
         startRoundBtn.addEventListener('click', startNewRound);
         endRoundBtn.addEventListener('click', endRound);
@@ -352,14 +342,13 @@
         closeScoreboardBtn.addEventListener('click', hideDetailedScoreboard);
         scoreRoundBtn.addEventListener('click', scoreRound);
         
-        // Listen for submissions from teams
         window.addEventListener('storage', (event) => {
             if (event.key === 'signalNoiseGameState') {
                 const storedState = JSON.parse(event.newValue);
                 if (storedState) {
                     gameState = storedState;
                     if (diagnosisModal.classList.contains('hidden') === false) {
-                        showDiagnosisModal(); // Refresh the modal if it's open
+                        showDiagnosisModal();
                     }
                 }
             }
