@@ -11,7 +11,6 @@
         .case-file-card { background-color: #fdfd96; border-left: 5px solid #f0e68c; }
         .ai-response { background-color: #e0f2fe; }
         .team-question { background-color: #d1fae5; }
-        .model-answer { background-color: #e9d5ff; border-left: 4px solid #8b5cf6; }
         .score-feedback { font-style: italic; padding: 8px; margin-top: 4px; border-radius: 6px; }
         .score-feedback.positive { background-color: #c6f6d5; color: #2f855a; }
         .score-feedback.negative { background-color: #fed7d7; color: #c53030; }
@@ -275,23 +274,23 @@
             renderUI();
         }
 
-        async function makeApiCall(action, payload) {
-            try {
-                const response = await fetch('/api/proxy', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action, payload })
-                });
-                if (!response.ok) throw new Error(`API request failed: ${response.status}`);
-                return await response.json();
-            } catch (error) {
-                console.error("API Call Error:", error);
-                return null;
-            }
-        }
-
         async function getAIResponseWithScore(question, caseFile) {
-            return makeApiCall('getResponse', { question, caseFile });
+            const { noise, signal } = caseFile;
+            const prompt = `You are a role-playing AI and a game judge. First, role-play as a frustrated customer based on the scenario. Second, evaluate the user's question.
+            SCENARIO: ${noise}
+            SECRET INFO: The root cause is "${signal.rootCause}". The real goal is "${signal.goal}".
+            USER'S QUESTION: "${question}"
+            Return a JSON object with "response" (string), "score" (number: -5 for noise, 5 for mixed, 10 for signal), and "justification" (string).`;
+            const schema = { type: "OBJECT", properties: { "response": { "type": "STRING" }, "score": { "type": "NUMBER" }, "justification": { "type": "STRING" }} };
+            const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json", responseSchema: schema } };
+            try {
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!response.ok) throw new Error(`API request failed: ${response.status}`);
+                const result = await response.json();
+                return JSON.parse(result.candidates[0].content.parts[0].text);
+            } catch (error) { console.error("API Call Error:", error); return null; }
         }
 
         const savedTeamId = sessionStorage.getItem('signalNoiseTeamId');
