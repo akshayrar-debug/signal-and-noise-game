@@ -35,7 +35,7 @@ export async function onRequestPost(context) {
                 SCENARIO: ${caseFile.noise}
                 SECRET INFO: The root cause is "${caseFile.signal.rootCause}". The real goal is "${caseFile.signal.goal}".
                 USER'S QUESTION: "${question}"
-                Return a JSON object with "response" (string), "score" (number, -5 for bad, 5 for good), and "justification" (string).`;
+                Return a JSON object with "response" (string), "score" (number, -5 for noise, 5 for mixed, 10 for signal), and "justification" (string).`;
                 schema = { type: "OBJECT", properties: { "response": { "type": "STRING" }, "score": { "type": "NUMBER" }, "justification": { "type": "STRING" }} };
                 break;
 
@@ -86,7 +86,6 @@ export async function onRequestPost(context) {
         const result = await apiResponse.json();
         const text = result.candidates[0].content.parts[0].text;
         
-        // Return the raw text if no schema was used, otherwise return the parsed JSON
         const finalResponse = schema ? JSON.parse(text) : text;
         
         return new Response(JSON.stringify(finalResponse), { headers: { 'Content-Type': 'application/json' } });
