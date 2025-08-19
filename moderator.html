@@ -14,20 +14,7 @@
         .model-answer { background-color: #e9d5ff; border-left: 4px solid #8b5cf6; }
         .spinner { border-top-color: #3498db; animation: spin 1s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        #detailed-scoreboard-page { transition: opacity 0.3s ease-in-out; }
-        .joker-active-btn {
-            animation: pulse 1.5s infinite;
-        }
-        @keyframes pulse {
-            0%, 100% {
-                transform: scale(1);
-                box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
-            }
-            50% {
-                transform: scale(1.05);
-                box-shadow: 0 0 10px 10px rgba(34, 197, 94, 0);
-            }
-        }
+        #detailed-scoreboard-page, #diagnosis-modal { transition: opacity 0.3s ease-in-out; }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
@@ -59,31 +46,10 @@
                 </div>
                 
                 <div id="game-area">
-                    <div id="prep-phase-display" class="text-center p-4 mb-4 bg-blue-100 border-2 border-dashed border-blue-300 rounded-lg hidden">
-                        <h3 class="text-lg font-semibold text-blue-800">Preparation Phase</h3>
-                        <p class="text-blue-700">Teams are reviewing the case and activating Jokers.</p>
-                        <div id="prep-timer" class="text-4xl font-bold text-blue-600 mt-2">00:30</div>
-                        <div id="joker-status-display" class="mt-4 text-sm text-gray-600"></div>
-                    </div>
-
-                    <div id="case-file-display" class="p-4 rounded-lg mb-6 case-file-card hidden">
+                     <div id="case-file-display" class="p-4 rounded-lg mb-6 case-file-card hidden">
                         <h3 id="case-file-title" class="font-bold text-lg mb-2">Case File</h3>
                         <p id="case-file-text" class="text-gray-700 whitespace-pre-wrap"></p>
                     </div>
-
-                    <div id="interaction-area" class="hidden">
-                        <div id="chat-box" class="h-96 overflow-y-auto border rounded-lg p-4 mb-4 bg-gray-50"></div>
-                        <div class="flex items-center gap-4">
-                             <select id="team-ask-select" class="p-2 border rounded-md bg-gray-50 flex-shrink-0"></select>
-                            <input type="text" id="question-input" class="flex-grow p-2 border rounded-md" placeholder="Ask a question on behalf of a team...">
-                            <button id="ask-btn" class="bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700">Ask</button>
-                        </div>
-                    </div>
-                    
-                    <div id="solution-area" class="mt-4 text-center hidden">
-                         <button id="solution-btn" class="bg-purple-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-purple-700">Reveal 10/10 Answer</button>
-                    </div>
-
                      <div id="start-prompt" class="text-center py-16">
                         <p class="text-xl text-gray-500">Click "Start New Round" to begin.</p>
                     </div>
@@ -104,45 +70,26 @@
             <div id="detailed-scoreboard-content" class="space-y-2"></div>
         </div>
     </div>
+
+    <!-- Diagnosis Modal -->
+    <div id="diagnosis-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center p-4 hidden opacity-0 z-50">
+        <div class="bg-white rounded-lg shadow-2xl p-8 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <h2 class="text-3xl font-bold mb-6 text-center">Team Submissions</h2>
+            <div id="diagnosis-display" class="space-y-6"></div>
+            <button id="score-round-btn" class="w-full mt-6 bg-purple-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-purple-700">Score Round & Reveal Answers</button>
+        </div>
+    </div>
     
     <script>
-        // Central Game State
         let gameState = {
             round: 0,
             teams: [],
             currentCaseFile: null,
-            prepTimerInterval: null,
             mainTimerInterval: null,
-            prepTimeLeft: 30,
             mainTimeLeft: 600,
             gameActive: false,
-            prepActive: false,
-            chatHistory: [],
-            solutionVisible: false,
-            tenTenAnswer: ''
         };
 
-        // Static Case Files for testing
-        const staticCaseFiles = [
-            {
-                title: "The Frustrated User",
-                noise: `You get an email from Tom, a new user at a key account.\n\nSubject: Your software is impossible!\n\n"I'm trying to do my job and your platform is just not user-friendly. I spent an hour trying to get a simple task done and got nowhere. I don't have time for this. My boss told me we have to use this, but I'm ready to go back to my old spreadsheets."`,
-                signal: {
-                    rootCause: "The user is trying to use the 'Bulk Data Import' feature but doesn't have the correct admin permissions enabled for his user role.",
-                    goal: "He needs to import a list of 500 new leads from a CSV file to start his weekly outreach campaign."
-                }
-            },
-            {
-                title: "The Last-Minute Change",
-                noise: `You get a call from Susan, the Head of Marketing, about the new landing page project that's due to launch next week.\n\nVoicemail: "Hi, quick one. I just saw the final design and the main banner needs to be video, not a static image. It's a must-have for the campaign. It should be an easy change, just swap the file. Let's get it done before the launch. Thanks!"`,
-                signal: {
-                    rootCause: "Susan saw a competitor's new website that uses video and is having a reactive moment, fearing the new landing page will look dated on launch.",
-                    goal: "She wants to ensure the new landing page has a high-impact, modern feel that will capture visitor attention immediately and increase the 'time on page' metric for her campaign."
-                }
-            }
-        ];
-
-        // DOM Elements
         const caseFileStatus = document.getElementById('case-file-status');
         const startRoundBtn = document.getElementById('start-round-btn');
         const endRoundBtn = document.getElementById('end-round-btn');
@@ -151,30 +98,19 @@
         const caseFileDisplay = document.getElementById('case-file-display');
         const caseFileTitle = document.getElementById('case-file-title');
         const caseFileText = document.getElementById('case-file-text');
-        const interactionArea = document.getElementById('interaction-area');
         const startPrompt = document.getElementById('start-prompt');
-        const chatBox = document.getElementById('chat-box');
-        const questionInput = document.getElementById('question-input');
-        const askBtn = document.getElementById('ask-btn');
-        const teamAskSelect = document.getElementById('team-ask-select');
         const scoreboardIcon = document.getElementById('scoreboard-icon');
         const detailedScoreboardPage = document.getElementById('detailed-scoreboard-page');
         const closeScoreboardBtn = document.getElementById('close-scoreboard-btn');
         const detailedScoreboardContent = document.getElementById('detailed-scoreboard-content');
-        const solutionArea = document.getElementById('solution-area');
-        const solutionBtn = document.getElementById('solution-btn');
-        const prepPhaseDisplay = document.getElementById('prep-phase-display');
-        const prepTimerEl = document.getElementById('prep-timer');
-        const jokerStatusDisplay = document.getElementById('joker-status-display');
+        const diagnosisModal = document.getElementById('diagnosis-modal');
+        const diagnosisDisplay = document.getElementById('diagnosis-display');
+        const scoreRoundBtn = document.getElementById('score-round-btn');
 
         function initializeGame() {
-            localStorage.removeItem('signalNoiseGameState');
+            localStorage.clear();
             for (let i = 1; i <= 5; i++) {
-                gameState.teams.push({ id: i, name: `Team ${i}`, score: 0, jokerAvailable: true, swapsAvailable: 1, jokerActive: false });
-                const option = document.createElement('option');
-                option.value = i;
-                option.textContent = `Team ${i}`;
-                teamAskSelect.appendChild(option);
+                gameState.teams.push({ id: i, name: `Team ${i}`, score: 0, jokerAvailable: true, jokerActive: false, diagnosis: { rootCause: '', goal: '' } });
             }
             updateLocalStorage();
         }
@@ -185,76 +121,39 @@
 
         async function startNewRound() {
             if (startRoundBtn.disabled) return;
-            clearInterval(gameState.prepTimerInterval);
             clearInterval(gameState.mainTimerInterval);
             
             startRoundBtn.disabled = true;
-            caseFileStatus.textContent = "Setting up new round...";
+            caseFileStatus.innerHTML = '<div class="flex items-center justify-center"><div class="spinner w-5 h-5 mr-2"></div>Generating...</div>';
             
-            // Use static case file instead of AI
-            const newCaseFile = staticCaseFiles[gameState.round % staticCaseFiles.length];
+            const newCaseFile = await generateNewCaseFile();
+            if (!newCaseFile) {
+                alert("Failed to generate case file.");
+                startRoundBtn.disabled = false;
+                caseFileStatus.textContent = "Error. Try again.";
+                return;
+            }
             
             gameState.round++;
             gameState.currentCaseFile = newCaseFile;
-            gameState.chatHistory = [];
-            gameState.solutionVisible = false;
-            gameState.tenTenAnswer = '';
-            gameState.teams.forEach(t => t.jokerActive = false);
+            gameState.teams.forEach(t => {
+                t.jokerActive = false;
+                t.diagnosis = { rootCause: '', goal: '' };
+            });
             
             roundNumberEl.textContent = gameState.round;
             caseFileTitle.textContent = gameState.currentCaseFile.title;
             caseFileText.textContent = gameState.currentCaseFile.noise;
             
-            startPreparationPhase();
-        }
-
-        function startPreparationPhase() {
-            gameState.prepActive = true;
-            gameState.gameActive = false;
-            
-            startPrompt.classList.add('hidden');
-            caseFileDisplay.classList.remove('hidden');
-            interactionArea.classList.add('hidden');
-            solutionArea.classList.add('hidden');
-            startRoundBtn.classList.add('hidden');
-            endRoundBtn.classList.add('hidden');
-            prepPhaseDisplay.classList.remove('hidden');
-            
-            timerEl.classList.add('text-gray-400');
-            timerEl.textContent = "10:00";
-
-            gameState.prepTimeLeft = 30;
-            updatePrepTimer();
-            gameState.prepTimerInterval = setInterval(updatePrepTimer, 1000);
-            caseFileStatus.textContent = "Preparation Phase...";
-            updateLocalStorage();
-        }
-
-        function updatePrepTimer() {
-            gameState.prepTimeLeft--;
-            prepTimerEl.textContent = `00:${gameState.prepTimeLeft.toString().padStart(2, '0')}`;
-            
-            const storedState = JSON.parse(localStorage.getItem('signalNoiseGameState'));
-            if (storedState) {
-                gameState.teams = storedState.teams;
-                const activeJokers = gameState.teams.filter(t => t.jokerActive).map(t => t.name).join(', ');
-                jokerStatusDisplay.textContent = activeJokers ? `Jokers Active: ${activeJokers}` : 'No Jokers Active';
-            }
-
-            if (gameState.prepTimeLeft <= 0) {
-                clearInterval(gameState.prepTimerInterval);
-                startMainRound();
-            }
+            startMainRound();
         }
 
         function startMainRound() {
-            gameState.prepActive = false;
             gameState.gameActive = true;
-
-            prepPhaseDisplay.classList.add('hidden');
-            interactionArea.classList.remove('hidden');
+            startPrompt.classList.add('hidden');
+            caseFileDisplay.classList.remove('hidden');
+            startRoundBtn.classList.add('hidden');
             endRoundBtn.classList.remove('hidden');
-            
             timerEl.classList.remove('text-gray-400');
             
             gameState.mainTimeLeft = 600;
@@ -263,7 +162,6 @@
             caseFileStatus.textContent = "Round in progress...";
             
             updateLocalStorage();
-            renderChat();
         }
 
         function updateMainTimer() {
@@ -283,67 +181,11 @@
             endRoundBtn.classList.add('hidden');
             startRoundBtn.classList.remove('hidden');
             startRoundBtn.disabled = false;
-            solutionArea.classList.remove('hidden');
             caseFileStatus.textContent = "Round ended. Awaiting diagnoses.";
+            showDiagnosisModal();
             updateLocalStorage(); 
         }
-
-        async function handleAskQuestion() {
-            const teamId = parseInt(teamAskSelect.value);
-            const team = gameState.teams.find(t => t.id === teamId);
-            const question = questionInput.value.trim();
-
-            if (!question || !team || !gameState.gameActive) return;
-
-            gameState.chatHistory.push({ author: team.name, text: question, type: 'team-question' });
-            renderChat();
-            
-            questionInput.value = '';
-            questionInput.disabled = true;
-            askBtn.disabled = true;
-
-            const aiResponse = await getAIResponse(question);
-            gameState.chatHistory.push({ author: 'AI', text: aiResponse, type: 'ai-response' });
-            
-            questionInput.disabled = false;
-            askBtn.disabled = false;
-            questionInput.focus();
-            
-            renderChat();
-            updateLocalStorage();
-        }
         
-        function renderChat() {
-            chatBox.innerHTML = '';
-            gameState.chatHistory.forEach(msg => {
-                const messageEl = document.createElement('div');
-                messageEl.className = `p-3 rounded-lg mb-2 ${msg.type}`;
-                messageEl.innerHTML = `<p><span class="font-bold">${msg.author}:</span> ${msg.text}</p>`;
-                chatBox.appendChild(messageEl);
-            });
-            chatBox.scrollTop = chatBox.scrollHeight;
-        }
-
-        async function revealSolution() {
-            if (gameState.tenTenAnswer) {
-                gameState.solutionVisible = true;
-                updateLocalStorage();
-                return;
-            }
-            
-            solutionBtn.textContent = 'Generating...';
-            solutionBtn.disabled = true;
-            
-            const modelAnswer = await getAIModelAnswer();
-            gameState.tenTenAnswer = modelAnswer;
-            gameState.solutionVisible = true;
-            
-            solutionBtn.textContent = 'Reveal 10/10 Answer';
-            solutionBtn.disabled = false;
-            
-            updateLocalStorage();
-        }
-
         function showDetailedScoreboard() {
             const storedState = JSON.parse(localStorage.getItem('signalNoiseGameState'));
             if (!storedState) return;
@@ -375,59 +217,126 @@
             detailedScoreboardPage.classList.add('opacity-0');
             setTimeout(() => detailedScoreboardPage.classList.add('hidden'), 300);
         }
+        
+        function showDiagnosisModal() {
+            diagnosisDisplay.innerHTML = '';
+            const storedState = JSON.parse(localStorage.getItem('signalNoiseGameState'));
+            if (storedState) {
+                gameState.teams = storedState.teams;
+            }
 
-        async function makeApiCall(prompt) {
+            gameState.teams.forEach(team => {
+                const teamDiv = document.createElement('div');
+                teamDiv.className = 'p-4 border rounded-lg bg-gray-50';
+                teamDiv.innerHTML = `
+                    <h4 class="font-bold text-lg mb-2">${team.name} ${team.jokerActive ? '<span class="text-sm text-yellow-600 font-semibold">(Joker Active)</span>' : ''}</h4>
+                    <p class="text-sm text-gray-500">Root Cause:</p>
+                    <p class="font-semibold mb-2">${team.diagnosis.rootCause || 'Not submitted'}</p>
+                    <p class="text-sm text-gray-500">Business Goal:</p>
+                    <p class="font-semibold">${team.diagnosis.goal || 'Not submitted'}</p>
+                `;
+                diagnosisDisplay.appendChild(teamDiv);
+            });
+
+            diagnosisModal.classList.remove('hidden');
+            setTimeout(() => diagnosisModal.classList.remove('opacity-0'), 10);
+        }
+
+        async function scoreRound() {
+            scoreRoundBtn.disabled = true;
+            scoreRoundBtn.textContent = 'AI is Scoring All Teams...';
+
+            for (const team of gameState.teams) {
+                const { rootCause, goal } = team.diagnosis;
+                let finalPoints = 0;
+                if (rootCause || goal) {
+                    const finalScore = await scoreDiagnosis(rootCause, goal);
+                    if (finalScore.correctRootCause) finalPoints += 10;
+                    if (finalScore.correctGoal) finalPoints += 10;
+                }
+                
+                if (team.jokerActive) {
+                    finalPoints *= 2;
+                    team.jokerAvailable = false;
+                }
+                
+                team.score += finalPoints;
+            }
+            
+            const modelAnswer = await getAIModelAnswer();
+            alert("Scores calculated! Model answer is now available in the team rooms.");
+
+            gameState.currentCaseFile.tenTenAnswer = modelAnswer;
+
+            diagnosisModal.classList.add('opacity-0');
+            setTimeout(() => diagnosisModal.classList.add('hidden'), 300);
+            
+            scoreRoundBtn.disabled = false;
+            scoreRoundBtn.textContent = 'Calculate Scores & Reveal Answers';
+            
+            updateLocalStorage();
+        }
+
+        async function makeApiCall(prompt, schema, isTextOnly = false) {
              const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
+            if (schema) {
+                payload.generationConfig = { responseMimeType: "application/json", responseSchema: schema };
+            }
             try {
                 const apiKey = "";
                 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
                 const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 if (!response.ok) throw new Error(`API request failed: ${response.status}`);
                 const result = await response.json();
-                return result.candidates[0].content.parts[0].text;
+                const text = result.candidates[0].content.parts[0].text;
+                return isTextOnly ? text : JSON.parse(text);
             } catch (error) { console.error("API Call Error:", error); return null; }
         }
 
         async function generateNewCaseFile() {
-            // This function now returns a static case file for testing.
-            return staticCaseFiles[gameState.round % staticCaseFiles.length];
+             const topics = ["SaaS Platform", "E-commerce Website", "Internal IT Project", "Healthcare Software"];
+             const roles = ["Customer Success Manager", "Project Manager"];
+             const randomTopic = topics[Math.floor(Math.random() * topics.length)];
+             const randomRole = roles[Math.floor(Math.random() * roles.length)];
+             const generationPrompt = `Generate a new, unique case file for a business simulation game. The theme is: ${randomTopic} for a ${randomRole}. The JSON object must have "title", "noise", and "signal" properties. "signal" must contain "rootCause" and "goal".`;
+            const schema = { type: "OBJECT", properties: { "title": { "type": "STRING" }, "noise": { "type": "STRING" }, "signal": { "type": "OBJECT", "properties": { "rootCause": { "type": "STRING" }, "goal": { "type": "STRING" }}}} };
+            return makeApiCall(generationPrompt, schema);
         }
-
-        async function getAIResponse(question) {
-            const { noise, signal } = gameState.currentCaseFile;
-            const prompt = `You are a role-playing AI. Respond realistically to the user's question based on the scenario. Do not reveal the secret info. Give helpful "Signal" info only for good, specific questions. Give vague "Noise" responses for bad questions.
-            SCENARIO: ${noise}
-            SECRET INFO: Root cause is "${signal.rootCause}". Real goal is "${signal.goal}".
-            USER'S QUESTION: "${question}"
-            Return only the role-played response as a single string.`;
-            return makeApiCall(prompt);
+        
+        async function scoreDiagnosis(submittedRootCause, submittedGoal) {
+            const { signal } = gameState.currentCaseFile;
+            const prompt = `You are a game judge. Compare the user's submitted diagnosis with the correct answer.
+            CORRECT ROOT CAUSE: "${signal.rootCause}"
+            CORRECT GOAL: "${signal.goal}"
+            USER'S SUBMITTED ROOT CAUSE: "${submittedRootCause}"
+            USER'S SUBMITTED GOAL: "${submittedGoal}"
+            Return a JSON object with "correctRootCause" (boolean), "correctGoal" (boolean), and "feedback" (string).`;
+            const schema = { type: "OBJECT", properties: { "correctRootCause": { "type": "BOOLEAN" }, "correctGoal": { "type": "BOOLEAN" }, "feedback": { "type": "STRING" }} };
+            return makeApiCall(prompt, schema);
         }
         
         async function getAIModelAnswer() {
-            const { noise, signal } = gameState.currentCaseFile;
+            const { signal } = gameState.currentCaseFile;
             const prompt = `You are an expert consultant. Based on the case file, provide a brief summary of a perfect "10/10" diagnosis. Explain the ideal thought process, key questions, and final conclusion.
-            INITIAL COMPLAINT: ${noise}
             REAL SITUATION: Root cause is "${signal.rootCause}". Real goal is "${signal.goal}".
             Return a single string with your summary.`;
-            return makeApiCall(prompt);
+            return makeApiCall(prompt, null, true);
         }
 
         // Event Listeners
         startRoundBtn.addEventListener('click', startNewRound);
         endRoundBtn.addEventListener('click', endRound);
-        askBtn.addEventListener('click', handleAskQuestion);
-        solutionBtn.addEventListener('click', revealSolution);
-        questionInput.addEventListener('keyup', (e) => { if (e.key === 'Enter') handleAskQuestion(); });
         scoreboardIcon.addEventListener('click', showDetailedScoreboard);
         closeScoreboardBtn.addEventListener('click', hideDetailedScoreboard);
+        scoreRoundBtn.addEventListener('click', scoreRound);
         
         window.addEventListener('storage', (event) => {
-            if (event.key === 'signalNoiseGameState' && gameState.prepActive) {
+            if (event.key === 'signalNoiseGameState') {
                 const storedState = JSON.parse(event.newValue);
-                if (storedState) {
-                    gameState.teams = storedState.teams;
-                    const activeJokers = gameState.teams.filter(t => t.jokerActive).map(t => t.name).join(', ');
-                    jokerStatusDisplay.textContent = activeJokers ? `Jokers Active: ${activeJokers}` : 'No Jokers Active';
+                if (storedState.gameActive === false && gameState.gameActive === true) {
+                    endRound();
+                } else if(storedState.gameActive === false && gameState.gameActive === false) {
+                    showDiagnosisModal();
                 }
             }
         });
