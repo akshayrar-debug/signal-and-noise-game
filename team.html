@@ -11,7 +11,6 @@
         .case-file-card { background-color: #fdfd96; border-left: 5px solid #f0e68c; }
         .ai-response { background-color: #e0f2fe; }
         .team-question { background-color: #d1fae5; }
-        .model-answer { background-color: #e9d5ff; border-left: 4px solid #8b5cf6; }
         .score-feedback { font-style: italic; padding: 8px; margin-top: 4px; border-radius: 6px; }
         .score-feedback.positive { background-color: #c6f6d5; color: #2f855a; }
         .score-feedback.negative { background-color: #fed7d7; color: #c53030; }
@@ -22,10 +21,10 @@
         }
         .submitted-overlay { position: relative; }
         .submitted-overlay::after {
-            content: 'Submitted! Waiting for moderator...';
+            content: 'Submitted! Waiting for round to end...';
             position: absolute;
             inset: 0;
-            background-color: rgba(249, 250, 251, 0.85);
+            background-color: rgba(243, 244, 246, 0.9);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -190,21 +189,15 @@
                 jokerBtn.classList.toggle('text-white', myTeam.jokerActive);
                 jokerBtn.classList.toggle('joker-active-btn', myTeam.jokerActive);
 
-                const hasSubmitted = myTeam.diagnosis.rootCause || myTeam.diagnosis.goal;
-                diagnosisForm.classList.toggle('submitted-overlay', hasSubmitted);
-                if (hasSubmitted) {
+                diagnosisForm.classList.toggle('submitted-overlay', myTeam.hasSubmitted);
+                if (myTeam.hasSubmitted) {
                     rootCauseInput.value = myTeam.diagnosis.rootCause;
                     goalInput.value = myTeam.diagnosis.goal;
-                    submitDiagnosisBtn.textContent = 'Submitted!';
-                    submitDiagnosisBtn.disabled = true;
-                } else {
-                    submitDiagnosisBtn.textContent = 'Submit Diagnosis';
-                    submitDiagnosisBtn.disabled = !state.gameActive;
                 }
             }
             
             chatBox.innerHTML = '';
-            const myTeamChat = state.chatHistory.filter(msg => msg.teamId === myTeamId || msg.author === 'AI' || msg.author === '10/10 Model Answer');
+            const myTeamChat = state.chatHistory.filter(msg => msg.teamId === myTeamId || msg.author === 'AI');
             myTeamChat.forEach(msg => {
                 const messageEl = document.createElement('div');
                 messageEl.className = `p-3 rounded-lg mb-2 ${msg.type}`;
@@ -226,13 +219,6 @@
                 }
                 chatBox.appendChild(messageEl);
             });
-            
-            if (state.solutionVisible && state.tenTenAnswer) {
-                const solutionEl = document.createElement('div');
-                solutionEl.className = 'p-3 rounded-lg mb-2 model-answer';
-                solutionEl.innerHTML = `<p><span class="font-bold">10/10 Model Answer:</span> ${state.tenTenAnswer}</p>`;
-                chatBox.appendChild(solutionEl);
-            }
 
             chatBox.scrollTop = chatBox.scrollHeight;
         }
@@ -282,6 +268,7 @@
             const myTeam = state.teams.find(t => t.id === myTeamId);
             myTeam.diagnosis.rootCause = rootCauseInput.value;
             myTeam.diagnosis.goal = goalInput.value;
+            myTeam.hasSubmitted = true;
             localStorage.setItem('signalNoiseGameState', JSON.stringify(state));
             renderUI();
         }
@@ -292,7 +279,7 @@
             SCENARIO: ${noise}
             SECRET INFO: The root cause is "${signal.rootCause}". The real goal is "${signal.goal}".
             USER'S QUESTION: "${question}"
-            Return a JSON object with "response" (string), "score" (number, -5 for bad, 5 for good), and "justification" (string).`;
+            Return a JSON object with "response" (string), "score" (number: -5 for noise, 5 for mixed, 10 for signal), and "justification" (string).`;
             const schema = { type: "OBJECT", properties: { "response": { "type": "STRING" }, "score": { "type": "NUMBER" }, "justification": { "type": "STRING" }} };
             const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json", responseSchema: schema } };
             try {
