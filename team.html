@@ -141,7 +141,7 @@
 
         function renderUI() {
             const state = getGameState();
-            if (!state) {
+            if (!state || !state.currentCaseFile) {
                 startPrompt.classList.remove('hidden');
                 interactionArea.classList.add('hidden');
                 caseFileDisplay.classList.add('hidden');
@@ -150,6 +150,18 @@
                 return;
             }
 
+            // --- Corrected Visibility Logic ---
+            startPrompt.classList.add('hidden');
+            caseFileDisplay.classList.remove('hidden');
+            caseFileTitle.textContent = state.currentCaseFile.title;
+            caseFileText.textContent = state.currentCaseFile.noise;
+            
+            prepPhaseDisplay.classList.toggle('hidden', !state.prepActive);
+            interactionArea.classList.toggle('hidden', !state.gameActive);
+            diagnosisPanel.classList.toggle('hidden', !state.gameActive);
+            submitDiagnosisBtn.disabled = !state.gameActive;
+
+            // --- Timer and Round Logic ---
             roundNumberEl.textContent = state.round || 1;
             const timerValue = state.prepActive ? state.prepTimeLeft : state.mainTimeLeft;
             const minutes = Math.floor(timerValue / 60);
@@ -158,31 +170,7 @@
             timerEl.className = `text-3xl font-bold ${state.gameActive ? 'text-red-500' : 'text-gray-400'}`;
             prepTimerEl.textContent = `00:${state.prepTimeLeft.toString().padStart(2, '0')}`;
 
-            prepPhaseDisplay.classList.toggle('hidden', !state.prepActive);
-            
-            if (state.gameActive) {
-                interactionArea.classList.remove('hidden');
-                diagnosisPanel.classList.remove('hidden');
-            } else {
-                interactionArea.classList.add('hidden');
-                diagnosisPanel.classList.add('hidden');
-            }
-
-
-            if (state.prepActive || state.gameActive) {
-                startPrompt.classList.add('hidden');
-                caseFileDisplay.classList.remove('hidden');
-                caseFileTitle.textContent = state.currentCaseFile.title;
-                caseFileText.textContent = state.currentCaseFile.noise;
-                submitDiagnosisBtn.disabled = false;
-            } else {
-                startPrompt.classList.remove('hidden');
-                caseFileDisplay.classList.add('hidden');
-                interactionArea.classList.add('hidden');
-                diagnosisPanel.classList.add('hidden');
-                submitDiagnosisBtn.disabled = true;
-            }
-            
+            // --- Joker Button Logic ---
             const myTeam = state.teams.find(t => t.id === myTeamId);
             if (myTeam) {
                 jokerBtn.disabled = !myTeam.jokerAvailable;
@@ -192,6 +180,7 @@
                 jokerBtn.classList.toggle('joker-active-btn', myTeam.jokerActive);
             }
 
+            // --- Chat History Logic ---
             chatBox.innerHTML = '';
             const myTeamChat = state.chatHistory.filter(msg => msg.teamId === myTeamId || msg.author === 'AI' || msg.author === '10/10 Model Answer');
             myTeamChat.forEach(msg => {
