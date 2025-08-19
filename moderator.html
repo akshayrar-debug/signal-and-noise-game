@@ -9,8 +9,6 @@
     <style>
         body { font-family: 'Inter', sans-serif; }
         .case-file-card { background-color: #fdfd96; border-left: 5px solid #f0e68c; }
-        .spinner { border-top-color: #3498db; animation: spin 1s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
@@ -72,6 +70,49 @@
             prepActive: false,
         };
 
+        const staticCaseFiles = [
+            {
+                title: "The Frustrated User",
+                noise: `You get an email from Tom, a new user at a key account.\n\nSubject: Your software is impossible!\n\n"I'm trying to do my job and your platform is just not user-friendly. I spent an hour trying to get a simple task done and got nowhere. I don't have time for this. My boss told me we have to use this, but I'm ready to go back to my old spreadsheets."`,
+                signal: {
+                    rootCause: "The user is trying to use the 'Bulk Data Import' feature but doesn't have the correct admin permissions enabled for his user role.",
+                    goal: "He needs to import a list of 500 new leads from a CSV file to start his weekly outreach campaign."
+                }
+            },
+            {
+                title: "The Last-Minute Change",
+                noise: `You get a call from Susan, the Head of Marketing, about the new landing page project that's due to launch next week.\n\nVoicemail: "Hi, quick one. I just saw the final design and the main banner needs to be video, not a static image. It's a must-have for the campaign. It should be an easy change, just swap the file. Let's get it done before the launch. Thanks!"`,
+                signal: {
+                    rootCause: "Susan saw a competitor's new website that uses video and is having a reactive moment, fearing the new landing page will look dated on launch.",
+                    goal: "She wants to ensure the new landing page has a high-impact, modern feel that will capture visitor attention immediately and increase the 'time on page' metric for her campaign."
+                }
+            },
+            {
+                title: "The Data Discrepancy",
+                noise: `A support ticket is escalated to you from a high-value client.\n\nSubject: Numbers don't match! URGENT!\n\n"The monthly user engagement report from your dashboard shows 1,500 active users. Our internal analytics tool shows only 1,200. This is a huge discrepancy. We can't trust your data, and we need to report on this to our leadership by EOD."`,
+                signal: {
+                    rootCause: "Your platform defines an 'active user' as anyone who logs in. Their internal tool defines it as someone who performs a 'key action' (e.g., creates a report). The definitions are different.",
+                    goal: "They need a reliable, agreed-upon number of users who are *truly engaging* with the platform to justify the software's cost to their leadership."
+                }
+            },
+            {
+                title: "The Integration Request",
+                noise: `An executive stakeholder, David, sends you a message about your team's current project.\n\nMessage: "We need to integrate our new CRM, 'ConnectSphere,' into the platform. It's our new company-wide standard. All customer data needs to sync with it. This is a top priority from the leadership team."`,
+                signal: {
+                    rootCause: "The sales team currently has to manually copy-paste customer contact information from your platform into the new CRM after every client call, which is slow and causes errors.",
+                    goal: "To automatically sync only the customer's Name, Email, and Phone Number from your platform to ConnectSphere to save the sales team time and improve data accuracy."
+                }
+            },
+            {
+                title: "The Performance Problem",
+                noise: `You receive an email from a long-time power user.\n\nSubject: Everything is so slow...\n\n"Lately, the whole platform just feels sluggish. It takes forever for pages to load, especially in the morning. It used to be so fast. Is something wrong on your end? It's really impacting my team's productivity."`,
+                signal: {
+                    rootCause: "The user's team has accumulated over 50,000 archived records in their shared dashboard view. The system is slow because it's trying to load all of them by default every time they log in.",
+                    goal: "The team needs a way to set their default dashboard view to show only 'Active' records from the last 30 days, so the page loads quickly and they can get to their daily tasks efficiently."
+                }
+            }
+        ];
+
         const caseFileStatus = document.getElementById('case-file-status');
         const startRoundBtn = document.getElementById('start-round-btn');
         const roundNumberEl = document.getElementById('round-number');
@@ -97,21 +138,11 @@
             localStorage.setItem('signalNoiseGameState', JSON.stringify(gameState));
         }
 
-        async function startNewRound() {
-            if (startRoundBtn.disabled) return;
+        function startNewRound() {
             clearInterval(gameState.prepTimerInterval);
             clearInterval(gameState.mainTimerInterval);
             
-            startRoundBtn.disabled = true;
-            caseFileStatus.innerHTML = '<div class="flex items-center justify-center"><div class="spinner w-5 h-5 mr-2"></div>Generating...</div>';
-            
-            const newCaseFile = await makeApiCall('generateCase');
-            if (!newCaseFile) {
-                alert("Failed to generate a new case file. Please try again.");
-                startRoundBtn.disabled = false;
-                caseFileStatus.textContent = "Error. Try again.";
-                return;
-            }
+            const newCaseFile = staticCaseFiles[gameState.round % staticCaseFiles.length];
             
             gameState.round++;
             gameState.currentCaseFile = newCaseFile;
@@ -205,7 +236,6 @@
             clearInterval(gameState.mainTimerInterval);
             gameState.gameActive = false;
             startRoundBtn.classList.remove('hidden');
-            startRoundBtn.disabled = false;
             caseFileStatus.textContent = "Round ended. Calculating scores...";
             scoreRound();
             updateLocalStorage(); 
@@ -240,7 +270,11 @@
                 const { rootCause, goal } = team.diagnosis;
                 let finalPoints = 0;
                 if (rootCause || goal) {
-                    const finalScore = await scoreDiagnosis(rootCause, goal);
+                    const finalScore = await makeApiCall('scoreDiagnosis', {
+                        signal: gameState.currentCaseFile.signal,
+                        submittedRootCause: rootCause,
+                        submittedGoal: goal
+                    });
                     if (finalScore.correctRootCause) finalPoints += 10;
                     if (finalScore.correctGoal) finalPoints += 10;
                 }
@@ -257,7 +291,7 @@
             alert("Scores calculated! Check the team room for results.");
             updateLocalStorage();
         }
-
+        
         async function makeApiCall(action, payload) {
             try {
                 const response = await fetch('/api/proxy', {
@@ -271,18 +305,6 @@
                 console.error("API Call Error:", error);
                 return null;
             }
-        }
-
-        async function generateNewCaseFile() {
-             return makeApiCall('generateCase');
-        }
-
-        async function scoreDiagnosis(submittedRootCause, submittedGoal) {
-            return makeApiCall('scoreDiagnosis', {
-                signal: gameState.currentCaseFile.signal,
-                submittedRootCause,
-                submittedGoal
-            });
         }
 
         window.addEventListener('storage', (event) => {
