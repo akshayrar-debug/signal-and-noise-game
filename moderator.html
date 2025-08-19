@@ -43,6 +43,13 @@
                 </div>
                 
                 <div id="game-area">
+                    <div id="prep-phase-display" class="text-center p-4 mb-4 bg-blue-100 border-2 border-dashed border-blue-300 rounded-lg hidden">
+                        <h3 class="text-lg font-semibold text-blue-800">Preparation Phase</h3>
+                        <p class="text-blue-700">Teams are reviewing the case and activating Jokers.</p>
+                        <div id="prep-timer" class="text-4xl font-bold text-blue-600 mt-2">00:30</div>
+                        <div id="joker-status-display" class="mt-4 text-sm text-gray-600"></div>
+                    </div>
+
                      <div id="case-file-display" class="p-4 rounded-lg mb-6 case-file-card hidden">
                         <h3 id="case-file-title" class="font-bold text-lg mb-2">Case File</h3>
                         <p id="case-file-text" class="text-gray-700 whitespace-pre-wrap"></p>
@@ -82,9 +89,12 @@
             round: 0,
             teams: [],
             currentCaseFile: null,
+            prepTimerInterval: null,
             mainTimerInterval: null,
+            prepTimeLeft: 30,
             mainTimeLeft: 600,
             gameActive: false,
+            prepActive: false,
         };
 
         const staticCaseFiles = [
@@ -122,6 +132,9 @@
         const diagnosisModal = document.getElementById('diagnosis-modal');
         const diagnosisDisplay = document.getElementById('diagnosis-display');
         const scoreRoundBtn = document.getElementById('score-round-btn');
+        const prepPhaseDisplay = document.getElementById('prep-phase-display');
+        const prepTimerEl = document.getElementById('prep-timer');
+        const jokerStatusDisplay = document.getElementById('joker-status-display');
 
         function initializeGame() {
             localStorage.clear();
@@ -136,6 +149,7 @@
         }
 
         function startNewRound() {
+            clearInterval(gameState.prepTimerInterval);
             clearInterval(gameState.mainTimerInterval);
             
             const newCaseFile = staticCaseFiles[gameState.round % staticCaseFiles.length];
@@ -151,15 +165,53 @@
             caseFileTitle.textContent = gameState.currentCaseFile.title;
             caseFileText.textContent = gameState.currentCaseFile.noise;
             
-            startMainRound();
+            startPreparationPhase();
         }
 
-        function startMainRound() {
-            gameState.gameActive = true;
+        function startPreparationPhase() {
+            gameState.prepActive = true;
+            gameState.gameActive = false;
+            
             startPrompt.classList.add('hidden');
             caseFileDisplay.classList.remove('hidden');
             startRoundBtn.classList.add('hidden');
+            endRoundBtn.classList.add('hidden');
+            prepPhaseDisplay.classList.remove('hidden');
+            
+            timerEl.classList.add('text-gray-400');
+            timerEl.textContent = "10:00";
+
+            gameState.prepTimeLeft = 30;
+            updatePrepTimer();
+            gameState.prepTimerInterval = setInterval(updatePrepTimer, 1000);
+            caseFileStatus.textContent = "Preparation Phase...";
+            updateLocalStorage();
+        }
+
+        function updatePrepTimer() {
+            gameState.prepTimeLeft--;
+            prepTimerEl.textContent = `00:${gameState.prepTimeLeft.toString().padStart(2, '0')}`;
+            
+            const storedState = JSON.parse(localStorage.getItem('signalNoiseGameState'));
+            if (storedState) {
+                gameState.teams = storedState.teams;
+                const activeJokers = gameState.teams.filter(t => t.jokerActive).map(t => t.name).join(', ');
+                jokerStatusDisplay.textContent = activeJokers ? `Jokers Active: ${activeJokers}` : 'No Jokers Active';
+            }
+
+            if (gameState.prepTimeLeft <= 0) {
+                clearInterval(gameState.prepTimerInterval);
+                startMainRound();
+            }
+        }
+
+        function startMainRound() {
+            gameState.prepActive = false;
+            gameState.gameActive = true;
+
+            prepPhaseDisplay.classList.add('hidden');
             endRoundBtn.classList.remove('hidden');
+            
             timerEl.classList.remove('text-gray-400');
             
             gameState.mainTimeLeft = 600;
@@ -232,13 +284,17 @@
 
             gameState.teams.forEach(team => {
                 const teamDiv = document.createElement('div');
-                teamDiv.className = 'p-4 border rounded-lg bg-gray-50';
+                const hasSubmitted = team.diagnosis.rootCause || team.diagnosis.goal;
+                teamDiv.className = `p-4 border rounded-lg ${hasSubmitted ? 'bg-green-50 border-green-300' : 'bg-gray-50'}`;
                 teamDiv.innerHTML = `
-                    <h4 class="font-bold text-lg mb-2">${team.name} ${team.jokerActive ? '<span class="text-sm text-yellow-600 font-semibold">(Joker Active)</span>' : ''}</h4>
+                    <h4 class="font-bold text-lg mb-2 flex justify-between items-center">
+                        <span>${team.name} ${team.jokerActive ? '<span class="text-sm text-yellow-600 font-semibold">(Joker Active)</span>' : ''}</span>
+                        <span class="text-sm font-medium ${hasSubmitted ? 'text-green-600' : 'text-gray-500'}">${hasSubmitted ? 'Submitted' : 'Not submitted'}</span>
+                    </h4>
                     <p class="text-sm text-gray-500">Root Cause:</p>
-                    <p class="font-semibold mb-2">${team.diagnosis.rootCause || 'Not submitted'}</p>
+                    <p class="font-semibold mb-2">${team.diagnosis.rootCause || '...'}</p>
                     <p class="text-sm text-gray-500">Business Goal:</p>
-                    <p class="font-semibold">${team.diagnosis.goal || 'Not submitted'}</p>
+                    <p class="font-semibold">${team.diagnosis.goal || '...'}</p>
                 `;
                 diagnosisDisplay.appendChild(teamDiv);
             });
@@ -254,9 +310,11 @@
             for (const team of gameState.teams) {
                 const { rootCause, goal } = team.diagnosis;
                 let finalPoints = 0;
-                // Simplified static check
-                if (rootCause.toLowerCase().includes('permission') || rootCause.toLowerCase().includes('video')) finalPoints += 10;
-                if (goal.toLowerCase().includes('import') || goal.toLowerCase().includes('metric')) finalPoints += 10;
+                if (rootCause || goal) {
+                    const finalScore = await scoreDiagnosis(rootCause, goal);
+                    if (finalScore.correctRootCause) finalPoints += 10;
+                    if (finalScore.correctGoal) finalPoints += 10;
+                }
                 
                 if (team.jokerActive) {
                     finalPoints *= 2;
@@ -279,6 +337,14 @@
             updateLocalStorage();
         }
 
+        async function scoreDiagnosis(submittedRootCause, submittedGoal) {
+            // Simplified static check for offline mode
+            const { signal } = gameState.currentCaseFile;
+            let correctRootCause = submittedRootCause.toLowerCase().includes(signal.rootCause.split(' ')[5]);
+            let correctGoal = submittedGoal.toLowerCase().includes(signal.goal.split(' ')[3]);
+            return { correctRootCause, correctGoal, feedback: "Scores calculated based on submission." };
+        }
+
         // Event Listeners
         startRoundBtn.addEventListener('click', startNewRound);
         endRoundBtn.addEventListener('click', endRound);
@@ -286,13 +352,15 @@
         closeScoreboardBtn.addEventListener('click', hideDetailedScoreboard);
         scoreRoundBtn.addEventListener('click', scoreRound);
         
+        // Listen for submissions from teams
         window.addEventListener('storage', (event) => {
             if (event.key === 'signalNoiseGameState') {
                 const storedState = JSON.parse(event.newValue);
-                if (storedState.gameActive === false && gameState.gameActive === true) {
-                    endRound();
-                } else if(storedState.gameActive === false && gameState.gameActive === false) {
-                    showDiagnosisModal();
+                if (storedState) {
+                    gameState = storedState;
+                    if (diagnosisModal.classList.contains('hidden') === false) {
+                        showDiagnosisModal(); // Refresh the modal if it's open
+                    }
                 }
             }
         });
