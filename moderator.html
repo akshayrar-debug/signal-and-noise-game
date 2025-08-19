@@ -122,6 +122,26 @@
             tenTenAnswer: ''
         };
 
+        // Static Case Files for testing
+        const staticCaseFiles = [
+            {
+                title: "The Frustrated User",
+                noise: `You get an email from Tom, a new user at a key account.\n\nSubject: Your software is impossible!\n\n"I'm trying to do my job and your platform is just not user-friendly. I spent an hour trying to get a simple task done and got nowhere. I don't have time for this. My boss told me we have to use this, but I'm ready to go back to my old spreadsheets."`,
+                signal: {
+                    rootCause: "The user is trying to use the 'Bulk Data Import' feature but doesn't have the correct admin permissions enabled for his user role.",
+                    goal: "He needs to import a list of 500 new leads from a CSV file to start his weekly outreach campaign."
+                }
+            },
+            {
+                title: "The Last-Minute Change",
+                noise: `You get a call from Susan, the Head of Marketing, about the new landing page project that's due to launch next week.\n\nVoicemail: "Hi, quick one. I just saw the final design and the main banner needs to be video, not a static image. It's a must-have for the campaign. It should be an easy change, just swap the file. Let's get it done before the launch. Thanks!"`,
+                signal: {
+                    rootCause: "Susan saw a competitor's new website that uses video and is having a reactive moment, fearing the new landing page will look dated on launch.",
+                    goal: "She wants to ensure the new landing page has a high-impact, modern feel that will capture visitor attention immediately and increase the 'time on page' metric for her campaign."
+                }
+            }
+        ];
+
         // DOM Elements
         const caseFileStatus = document.getElementById('case-file-status');
         const startRoundBtn = document.getElementById('start-round-btn');
@@ -169,15 +189,10 @@
             clearInterval(gameState.mainTimerInterval);
             
             startRoundBtn.disabled = true;
-            caseFileStatus.innerHTML = '<div class="flex items-center justify-center"><div class="spinner w-5 h-5 mr-2"></div>Generating...</div>';
+            caseFileStatus.textContent = "Setting up new round...";
             
-            const newCaseFile = await generateNewCaseFile();
-            if (!newCaseFile) {
-                alert("Failed to generate a new case file. Please try again.");
-                startRoundBtn.disabled = false;
-                caseFileStatus.textContent = "Error. Try again.";
-                return;
-            }
+            // Use static case file instead of AI
+            const newCaseFile = staticCaseFiles[gameState.round % staticCaseFiles.length];
             
             gameState.round++;
             gameState.currentCaseFile = newCaseFile;
@@ -361,67 +376,21 @@
             setTimeout(() => detailedScoreboardPage.classList.add('hidden'), 300);
         }
 
-        async function makeApiCall(prompt, schema, isTextOnly = false) {
-            const payload = {
-                contents: [{ role: "user", parts: [{ text: prompt }] }]
-            };
-            if (schema) {
-                payload.generationConfig = {
-                    responseMimeType: "application/json",
-                    responseSchema: schema
-                };
-            }
-            
-            let attempt = 0;
-            const maxAttempts = 3;
-            let delay = 1000;
-
-            while (attempt < maxAttempts) {
-                try {
-                    const apiKey = "";
-                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-                    const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                    
-                    if (!response.ok) {
-                        if (response.status >= 400 && response.status < 500) {
-                            console.error("API client error:", await response.text());
-                            throw new Error(`API request failed with status ${response.status}`);
-                        }
-                        throw new Error(`API server error with status ${response.status}`);
-                    }
-                    
-                    const result = await response.json();
-                    if (!result.candidates || !result.candidates[0].content.parts[0].text) {
-                        throw new Error("Invalid API response structure");
-                    }
-
-                    if (isTextOnly) {
-                        return result.candidates[0].content.parts[0].text;
-                    }
-                    return JSON.parse(result.candidates[0].content.parts[0].text);
-
-                } catch (error) {
-                    console.error(`Attempt ${attempt + 1} failed:`, error.message);
-                    attempt++;
-                    if (attempt >= maxAttempts) {
-                        console.error("All API call attempts failed.");
-                        return null;
-                    }
-                    await new Promise(res => setTimeout(res, delay));
-                    delay *= 2;
-                }
-            }
-            return null;
+        async function makeApiCall(prompt) {
+             const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
+            try {
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!response.ok) throw new Error(`API request failed: ${response.status}`);
+                const result = await response.json();
+                return result.candidates[0].content.parts[0].text;
+            } catch (error) { console.error("API Call Error:", error); return null; }
         }
 
         async function generateNewCaseFile() {
-             const topics = ["SaaS Platform", "E-commerce Website", "Internal IT Project", "Healthcare Software"];
-             const roles = ["Customer Success Manager", "Project Manager"];
-             const randomTopic = topics[Math.floor(Math.random() * topics.length)];
-             const randomRole = roles[Math.floor(Math.random() * roles.length)];
-             const generationPrompt = `Generate a new, unique case file for a business simulation game. The theme is: ${randomTopic} for a ${randomRole}. The JSON object must have "title", "noise", and "signal" properties. "signal" must contain "rootCause" and "goal".`;
-            const schema = { type: "OBJECT", properties: { "title": { "type": "STRING" }, "noise": { "type": "STRING" }, "signal": { "type": "OBJECT", "properties": { "rootCause": { "type": "STRING" }, "goal": { "type": "STRING" }}}} };
-            return makeApiCall(generationPrompt, schema);
+            // This function now returns a static case file for testing.
+            return staticCaseFiles[gameState.round % staticCaseFiles.length];
         }
 
         async function getAIResponse(question) {
@@ -431,7 +400,7 @@
             SECRET INFO: Root cause is "${signal.rootCause}". Real goal is "${signal.goal}".
             USER'S QUESTION: "${question}"
             Return only the role-played response as a single string.`;
-            return makeApiCall(prompt, null, true);
+            return makeApiCall(prompt);
         }
         
         async function getAIModelAnswer() {
@@ -440,7 +409,7 @@
             INITIAL COMPLAINT: ${noise}
             REAL SITUATION: Root cause is "${signal.rootCause}". Real goal is "${signal.goal}".
             Return a single string with your summary.`;
-            return makeApiCall(prompt, null, true);
+            return makeApiCall(prompt);
         }
 
         // Event Listeners
