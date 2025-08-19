@@ -12,13 +12,16 @@
         .ai-response { background-color: #e0f2fe; }
         .team-question { background-color: #d1fae5; }
         .model-answer { background-color: #e9d5ff; border-left: 4px solid #8b5cf6; }
-        .joker-active-btn {
-            animation: pulse 1.5s infinite;
-        }
+        .score-feedback { font-style: italic; padding: 8px; margin-top: 4px; border-radius: 6px; }
+        .score-feedback.positive { background-color: #c6f6d5; color: #2f855a; }
+        .score-feedback.negative { background-color: #fed7d7; color: #c53030; }
+        .joker-active-btn { animation: pulse 1.5s infinite; }
         @keyframes pulse {
             0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
             50% { transform: scale(1.05); box-shadow: 0 0 10px 10px rgba(34, 197, 94, 0); }
         }
+        details > summary { list-style: none; cursor: pointer; }
+        details > summary::-webkit-details-marker { display: none; }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
@@ -26,9 +29,7 @@
     <div id="team-selection-screen" class="flex items-center justify-center h-screen">
         <div class="text-center bg-white p-12 rounded-xl shadow-2xl">
             <h2 class="text-3xl font-bold text-gray-800 mb-6">Select Your Team</h2>
-            <div id="team-buttons" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                <!-- Team buttons will be populated here -->
-            </div>
+            <div id="team-buttons" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4"></div>
         </div>
     </div>
 
@@ -46,15 +47,14 @@
                 </div>
                 
                 <div id="game-area">
-                    <div id="prep-phase-display" class="text-center p-4 mb-4 bg-blue-100 border-2 border-dashed border-blue-300 rounded-lg hidden">
+                     <div id="prep-phase-display" class="text-center p-4 mb-4 bg-blue-100 border-2 border-dashed border-blue-300 rounded-lg hidden">
                         <h3 class="text-lg font-semibold text-blue-800">Preparation Phase</h3>
-                        <p class="text-blue-700">Review the case file and decide if you want to use your Joker!</p>
+                        <p class="text-blue-700">Review the case and decide if you want to use your Joker!</p>
                         <div id="prep-timer" class="text-4xl font-bold text-blue-600 mt-2">00:30</div>
                         <div id="team-prep-actions" class="mt-4">
                              <button id="joker-btn" class="bg-yellow-400 text-yellow-900 px-4 py-2 rounded-md font-semibold hover:bg-yellow-500 disabled:bg-gray-300">Use Joker</button>
                         </div>
                     </div>
-
                     <div id="case-file-display" class="p-4 rounded-lg mb-6 case-file-card hidden">
                         <h3 id="case-file-title" class="font-bold text-lg mb-2">Case File</h3>
                         <p id="case-file-text" class="text-gray-700 whitespace-pre-wrap"></p>
@@ -79,11 +79,11 @@
                  <div class="space-y-4">
                     <div>
                         <label for="root-cause-input" class="block text-sm font-medium text-gray-700">Root Cause</label>
-                        <textarea id="root-cause-input" rows="4" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="What is the specific, underlying problem?"></textarea>
+                        <textarea id="root-cause-input" rows="4" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" placeholder="What is the specific, underlying problem?"></textarea>
                     </div>
                     <div>
                         <label for="goal-input" class="block text-sm font-medium text-gray-700">Business Goal</label>
-                        <textarea id="goal-input" rows="4" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="What is the true business outcome the stakeholder wants?"></textarea>
+                        <textarea id="goal-input" rows="4" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" placeholder="What is the true business outcome?"></textarea>
                     </div>
                     <button id="submit-diagnosis-btn" class="w-full bg-purple-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-purple-700 disabled:bg-gray-400">Submit Diagnosis</button>
                  </div>
@@ -94,7 +94,6 @@
     <script>
         let myTeamId = null;
 
-        // DOM Elements
         const teamSelectionScreen = document.getElementById('team-selection-screen');
         const mainGameScreen = document.getElementById('main-game-screen');
         const teamButtons = document.getElementById('team-buttons');
@@ -109,7 +108,6 @@
         const chatBox = document.getElementById('chat-box');
         const prepPhaseDisplay = document.getElementById('prep-phase-display');
         const prepTimerEl = document.getElementById('prep-timer');
-        const teamPrepActions = document.getElementById('team-prep-actions');
         const jokerBtn = document.getElementById('joker-btn');
         const questionInput = document.getElementById('question-input');
         const askBtn = document.getElementById('ask-btn');
