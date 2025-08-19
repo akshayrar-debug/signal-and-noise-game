@@ -254,9 +254,9 @@
             for (const team of gameState.teams) {
                 const { rootCause, goal } = team.diagnosis;
                 let finalPoints = 0;
-                // This is a simplified check for static mode
-                if (rootCause.toLowerCase().includes('permission')) finalPoints += 10;
-                if (goal.toLowerCase().includes('import')) finalPoints += 10;
+                // Simplified static check
+                if (rootCause.toLowerCase().includes('permission') || rootCause.toLowerCase().includes('video')) finalPoints += 10;
+                if (goal.toLowerCase().includes('import') || goal.toLowerCase().includes('metric')) finalPoints += 10;
                 
                 if (team.jokerActive) {
                     finalPoints *= 2;
@@ -268,7 +268,7 @@
             
             alert("Scores calculated!");
 
-            gameState.currentCaseFile.tenTenAnswer = "The ideal answer would identify that the user lacks permissions for the specific feature they are trying to use.";
+            gameState.currentCaseFile.tenTenAnswer = "The ideal answer would be determined by the AI based on the specific static case file for the round.";
 
             diagnosisModal.classList.add('opacity-0');
             setTimeout(() => diagnosisModal.classList.add('hidden'), 300);
